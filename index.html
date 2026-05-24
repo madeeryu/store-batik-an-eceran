@@ -1227,7 +1227,379 @@
       <!-- ============================================================ -->
       <!-- BAGIAN 3: Master Produk, Master Mitra, Set Target,           -->
       <!--           Analisis Profit, Pengaturan                         -->
+      <!-- TEMPEL PERSIS DI SINI, GANTIKAN komentar placeholder lama    -->
       <!-- ============================================================ -->
+
+      <!-- ======================================================= -->
+      <!-- PAGE: MASTER PRODUK                                       -->
+      <!-- ======================================================= -->
+      <div class="page" id="page-master-produk">
+        <div class="page-header">
+          <div class="page-header-row">
+            <div>
+              <div class="page-title">Master Produk Eceran</div>
+              <div class="page-subtitle">Kelola produk yang dijual di eceran, set harga &amp; modal</div>
+            </div>
+            <button class="btn btn-primary" onclick="openModalTambahProduk()">➕ Tambah Produk Eceran</button>
+          </div>
+          <!-- Tab filter -->
+          <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap" id="master-produk-tabs">
+            <button class="btn btn-primary btn-sm" id="tab-semua-eceran" onclick="setMasterProdukTab('semua')">Semua Produk Eceran</button>
+            <button class="btn btn-secondary btn-sm" id="tab-khusus-eceran" onclick="setMasterProdukTab('khusus')">Khusus Eceran</button>
+            <button class="btn btn-secondary btn-sm" id="tab-juga-grosir" onclick="setMasterProdukTab('grosir')">Yang Juga di Grosir</button>
+          </div>
+        </div>
+        <div class="card">
+          <div id="master-produk-content">
+            <div class="loading-state"><div class="loading-spinner"></div> Memuat data produk...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- MODAL: Tambah/Edit Produk Eceran -->
+      <div class="modal-overlay" id="modal-produk-eceran">
+        <div class="modal" style="max-width:520px">
+          <div class="modal-header">
+            <div class="modal-title" id="modal-produk-title">Tambah Produk Eceran</div>
+            <button class="modal-close" onclick="closeModal('modal-produk-eceran')">✕</button>
+          </div>
+          <div id="modal-produk-body" style="padding:20px 24px"></div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeModal('modal-produk-eceran')">Batal</button>
+            <button class="btn btn-primary" id="btn-simpan-produk" onclick="simpanProdukEceran()">💾 Simpan</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- MODAL: Konfirmasi Nonaktifkan Produk -->
+      <div class="modal-overlay" id="modal-nonaktif-produk">
+        <div class="modal" style="max-width:400px">
+          <div class="modal-header">
+            <div class="modal-title">⚠️ Nonaktifkan Produk</div>
+            <button class="modal-close" onclick="closeModal('modal-nonaktif-produk')">✕</button>
+          </div>
+          <div style="padding:20px 24px">
+            <p>Produk ini akan disembunyikan dari halaman input laku dan stok keranjang. Lanjutkan?</p>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeModal('modal-nonaktif-produk')">Batal</button>
+            <button class="btn btn-danger" id="btn-konfirmasi-nonaktif-produk">Nonaktifkan</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ======================================================= -->
+      <!-- PAGE: MASTER MITRA                                        -->
+      <!-- ======================================================= -->
+      <div class="page" id="page-master-mitra">
+        <div class="page-header">
+          <div class="page-header-row">
+            <div>
+              <div class="page-title">Master Mitra</div>
+              <div class="page-subtitle">Kelola akun dan data mitra eceran</div>
+            </div>
+            <button class="btn btn-primary" onclick="openModalTambahMitra()">➕ Tambah Mitra Baru</button>
+          </div>
+        </div>
+        <div class="card">
+          <div id="master-mitra-content">
+            <div class="loading-state"><div class="loading-spinner"></div> Memuat data mitra...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- MODAL: Tambah Mitra -->
+      <div class="modal-overlay" id="modal-tambah-mitra">
+        <div class="modal" style="max-width:480px">
+          <div class="modal-header">
+            <div class="modal-title">➕ Tambah Mitra Baru</div>
+            <button class="modal-close" onclick="closeModal('modal-tambah-mitra')">✕</button>
+          </div>
+          <div style="padding:20px 24px" id="modal-tambah-mitra-body">
+            <div class="form-group">
+              <label>Nama Mitra <span style="color:var(--red-text)">*</span></label>
+              <input type="text" class="input" id="mitra-nama-input" placeholder="contoh: Siti Isa" oninput="autoGeneratePassword()" />
+            </div>
+            <div class="form-group">
+              <label>Email Login <span style="color:var(--red-text)">*</span></label>
+              <input type="email" class="input" id="mitra-email-input" placeholder="email@contoh.com" />
+            </div>
+            <div class="form-group">
+              <label>Password Sementara</label>
+              <div style="display:flex;gap:8px">
+                <input type="text" class="input" id="mitra-password-input" placeholder="Min. 6 karakter" style="flex:1" />
+                <button class="btn btn-secondary btn-sm" onclick="generatePassword()" style="white-space:nowrap">🔀 Generate</button>
+                <button class="btn btn-secondary btn-sm" onclick="salinPassword()" style="white-space:nowrap">📋 Salin</button>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeModal('modal-tambah-mitra')">Batal</button>
+            <button class="btn btn-primary" id="btn-simpan-mitra" onclick="simpanMitraBaru()">💾 Simpan &amp; Buat Akun</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- MODAL: Sukses Tambah Mitra -->
+      <div class="modal-overlay" id="modal-mitra-sukses">
+        <div class="modal" style="max-width:420px">
+          <div class="modal-header">
+            <div class="modal-title">✅ Akun Mitra Berhasil Dibuat</div>
+            <button class="modal-close" onclick="closeModal('modal-mitra-sukses')">✕</button>
+          </div>
+          <div style="padding:20px 24px">
+            <div class="info-box info-box-green mb-16">
+              Berikan kredensial ini ke mitra. Mereka bisa ganti password setelah login pertama.
+            </div>
+            <div style="background:var(--bg);border-radius:10px;padding:16px;font-size:14px;line-height:2">
+              <div><strong>Email:</strong> <span id="sukses-mitra-email"></span></div>
+              <div><strong>Password:</strong> <span id="sukses-mitra-password" style="font-family:monospace;letter-spacing:1px"></span></div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeModal('modal-mitra-sukses')">Tutup</button>
+            <button class="btn btn-primary" onclick="salinKredensialMitra()">📋 Salin Kredensial</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- MODAL: Konfirmasi Nonaktifkan Mitra -->
+      <div class="modal-overlay" id="modal-nonaktif-mitra">
+        <div class="modal" style="max-width:400px">
+          <div class="modal-header">
+            <div class="modal-title">⚠️ Nonaktifkan Mitra</div>
+            <button class="modal-close" onclick="closeModal('modal-nonaktif-mitra')">✕</button>
+          </div>
+          <div style="padding:20px 24px">
+            <p id="modal-nonaktif-mitra-text">Mitra ini tidak akan bisa login lagi. Lanjutkan?</p>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeModal('modal-nonaktif-mitra')">Batal</button>
+            <button class="btn btn-danger" id="btn-konfirmasi-nonaktif-mitra">Nonaktifkan</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ======================================================= -->
+      <!-- PAGE: SET TARGET KERANJANG                               -->
+      <!-- ======================================================= -->
+      <div class="page" id="page-set-target">
+        <div class="page-header">
+          <div class="page-header-row">
+            <div>
+              <div class="page-title">Set Target Stok Keranjang</div>
+              <div class="page-subtitle">Stok di bawah 50% target akan masuk indikator stok menipis</div>
+            </div>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-secondary" onclick="openModalSalinTarget()">📋 Salin dari Mitra Lain</button>
+              <button class="btn btn-primary" onclick="simpanSemuaTarget()">💾 Simpan Semua</button>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div id="set-target-content">
+            <div class="loading-state"><div class="loading-spinner"></div> Memuat data target...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- MODAL: Salin Target -->
+      <div class="modal-overlay" id="modal-salin-target">
+        <div class="modal" style="max-width:420px">
+          <div class="modal-header">
+            <div class="modal-title">📋 Salin Target Antar Mitra</div>
+            <button class="modal-close" onclick="closeModal('modal-salin-target')">✕</button>
+          </div>
+          <div style="padding:20px 24px">
+            <div class="form-group">
+              <label>Salin dari mitra:</label>
+              <select class="input" id="salin-target-dari"></select>
+            </div>
+            <div class="form-group">
+              <label>Salin ke mitra:</label>
+              <select class="input" id="salin-target-ke"></select>
+            </div>
+            <div class="info-box info-box-amber">
+              ⚠️ Semua target untuk mitra tujuan akan ditimpa dengan target mitra sumber.
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeModal('modal-salin-target')">Batal</button>
+            <button class="btn btn-primary" onclick="eksekusiSalinTarget()">Salin Sekarang</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ======================================================= -->
+      <!-- PAGE: ANALISIS PROFIT                                     -->
+      <!-- ======================================================= -->
+      <div class="page" id="page-analisis-profit">
+        <div class="page-header">
+          <div class="page-header-row">
+            <div>
+              <div class="page-title">Analisis Profit Eceran</div>
+              <div class="page-subtitle">Ringkasan omzet, modal, dan keuntungan per periode</div>
+            </div>
+            <button class="btn btn-secondary no-print" onclick="printAnalisis()">📄 Export PDF</button>
+          </div>
+          <!-- Filter tab periode -->
+          <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap">
+            <button class="btn btn-primary btn-sm" id="ap-tab-hari" onclick="setAnalisisPeriode('hari')">📅 Hari Ini</button>
+            <button class="btn btn-secondary btn-sm" id="ap-tab-minggu" onclick="setAnalisisPeriode('minggu')">📅 Minggu Ini</button>
+            <button class="btn btn-secondary btn-sm" id="ap-tab-bulan" onclick="setAnalisisPeriode('bulan')">📅 Bulan Ini</button>
+            <button class="btn btn-secondary btn-sm" id="ap-tab-custom" onclick="setAnalisisPeriode('custom')">📅 Custom</button>
+          </div>
+          <div id="ap-custom-range" style="display:none;margin-top:12px">
+            <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
+              <div class="form-group" style="margin:0;min-width:140px">
+                <label>Dari</label>
+                <input type="date" class="input" id="ap-tgl-mulai" />
+              </div>
+              <div class="form-group" style="margin:0;min-width:140px">
+                <label>Sampai</label>
+                <input type="date" class="input" id="ap-tgl-selesai" />
+              </div>
+              <button class="btn btn-primary btn-sm" onclick="loadAnalisisProfit()">Tampilkan</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Print Header -->
+        <div id="ap-print-header" style="display:none">
+          <h2 style="font-size:18px;font-weight:800">Analisis Profit Eceran — Batik AN</h2>
+          <p id="ap-print-periode" style="font-size:13px;color:#555;margin:4px 0 16px"></p>
+        </div>
+
+        <!-- Section 1: Ringkasan -->
+        <div class="stats-grid cols-4 mb-20" id="ap-ringkasan">
+          <div class="loading-state" style="grid-column:1/-1"><div class="loading-spinner"></div></div>
+        </div>
+
+        <!-- Section 2: Per Mitra -->
+        <div class="card mb-20">
+          <div class="section-title">👥 Profit per Mitra</div>
+          <div id="ap-per-mitra"><div class="loading-state"><div class="loading-spinner"></div></div></div>
+        </div>
+
+        <!-- Section 3: Per Produk -->
+        <div class="card mb-20">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+            <div class="section-title" style="margin:0">🏷️ Profit per Produk</div>
+            <button class="btn btn-secondary btn-sm" id="btn-toggle-produk" onclick="toggleProdukView()">Top 10</button>
+          </div>
+          <div id="ap-per-produk"><div class="loading-state"><div class="loading-spinner"></div></div></div>
+        </div>
+
+        <!-- Section 4: Chart Tren -->
+        <div class="card mb-20 no-print">
+          <div class="section-title">📊 Tren Profit per Pasaran</div>
+          <div style="position:relative;height:260px">
+            <canvas id="chart-profit-tren"></canvas>
+          </div>
+        </div>
+
+        <!-- Print Chart (image) -->
+        <div id="ap-print-chart" style="display:none">
+          <div class="section-title">📊 Tren Profit</div>
+          <img id="ap-print-chart-img" style="max-width:100%;border-radius:8px" />
+        </div>
+
+        <!-- Section 5: Detail Transaksi -->
+        <div class="card">
+          <div class="section-title">📋 Detail Transaksi</div>
+          <div id="ap-detail-transaksi"><div class="loading-state"><div class="loading-spinner"></div></div></div>
+          <div id="ap-pagination" style="display:flex;gap:8px;justify-content:center;margin-top:16px"></div>
+        </div>
+
+        <!-- Print Footer -->
+        <div id="ap-print-footer" style="display:none;margin-top:32px;font-size:11px;color:#888;text-align:center;border-top:1px solid #ccc;padding-top:12px">
+          Confidential — Internal Use Only · Dicetak: <span id="ap-print-date"></span>
+        </div>
+      </div>
+
+      <!-- MODAL: Detail Transaksi Analisis -->
+      <div class="modal-overlay" id="modal-ap-detail">
+        <div class="modal" style="max-width:640px">
+          <div class="modal-header">
+            <div class="modal-title">Detail Transaksi</div>
+            <button class="modal-close" onclick="closeModal('modal-ap-detail')">✕</button>
+          </div>
+          <div id="modal-ap-detail-body" style="padding:20px 24px"></div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeModal('modal-ap-detail')">Tutup</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ======================================================= -->
+      <!-- PAGE: PENGATURAN                                          -->
+      <!-- ======================================================= -->
+      <div class="page" id="page-pengaturan">
+        <div class="page-header">
+          <div class="page-title">Pengaturan</div>
+          <div class="page-subtitle">Konfigurasi aplikasi eceran</div>
+        </div>
+
+        <!-- Section 1: Info Bisnis -->
+        <div class="card mb-20">
+          <div class="section-title">🏪 Info Bisnis</div>
+          <div class="form-group">
+            <label>Nama Toko</label>
+            <input type="text" class="input" id="setting-nama-toko" placeholder="Batik AN" />
+          </div>
+          <div class="form-group">
+            <label>Alamat</label>
+            <input type="text" class="input" id="setting-alamat" placeholder="Jl. Contoh No. 1" />
+          </div>
+          <div class="form-group">
+            <label>Nomor HP</label>
+            <input type="text" class="input" id="setting-hp" placeholder="08xxxxxxxxxx" />
+          </div>
+          <div class="form-group">
+            <label>Catatan</label>
+            <textarea class="input" id="setting-catatan" rows="3" placeholder="Catatan tambahan..."></textarea>
+          </div>
+          <button class="btn btn-primary" onclick="simpanInfoBisnis()">💾 Simpan Info Bisnis</button>
+        </div>
+
+        <!-- Section 2: Migration Tool -->
+        <div class="card mb-20">
+          <div class="section-title">🔄 Inisialisasi Field Eceran</div>
+          <div class="info-box info-box-amber mb-16">
+            ⚠️ Tool untuk menambahkan field <code>eceran</code> pada semua produk grosir yang sudah ada. <strong>Jalankan SEKALI saja saat pertama deploy.</strong>
+          </div>
+          <div id="migration-status" class="mb-16"></div>
+          <button class="btn btn-secondary" id="btn-inisialisasi" onclick="jalankanInisialisasi()">🔄 Scan &amp; Inisialisasi</button>
+        </div>
+
+        <!-- Section 3: Kelola Akun -->
+        <div class="card mb-20">
+          <div class="section-title">👥 Kelola Akun</div>
+          <div class="mb-16">
+            <button class="btn btn-secondary" onclick="navigateTo('master-mitra')">→ Kelola Mitra</button>
+          </div>
+          <div class="info-box info-box-blue mb-12" style="font-size:13px">
+            ℹ️ Manajemen akun karyawan dilakukan di aplikasi grosir.
+          </div>
+          <div id="setting-karyawan-list">
+            <div class="loading-state"><div class="loading-spinner"></div> Memuat data karyawan...</div>
+          </div>
+        </div>
+
+        <!-- Section 4: Tentang -->
+        <div class="card mb-20">
+          <div class="section-title">ℹ️ Tentang Aplikasi</div>
+          <div style="font-size:14px;color:var(--text-secondary);line-height:1.8">
+            <div><strong>Versi:</strong> 1.0.0</div>
+            <div><strong>Aplikasi:</strong> Eceran Batik AN</div>
+            <div><strong>Database:</strong> store-batik-an (Firestore)</div>
+            <div style="margin-top:8px"><a href="#" style="color:var(--green)" onclick="alert('Buka URL aplikasi grosir di browser')">→ Buka Aplikasi Grosir</a></div>
+          </div>
+          <div style="margin-top:24px">
+            <button class="btn btn-danger w-full" onclick="doLogout()">🚪 Keluar dari Aplikasi</button>
+          </div>
+        </div>
+      </div>
 
     </div><!-- /content-inner -->
   </main>
@@ -1309,6 +1681,8 @@
   appId: "1:1016593352699:web:6f13430d9832bbae8f6d5e",
   measurementId: "G-CW6Z3BMV04"
 };
+
+  window._firebaseConfig = firebaseConfig;
 
   const app = initializeApp(firebaseConfig);
   const auth = getAuth(app);
@@ -2394,18 +2768,7 @@
   /* ----------------------------------------------------------
      EKSTENSI NAVIGASI (disambung ke navigateTo Bagian 1)
   ---------------------------------------------------------- */
-  window._navigateExtension = function(page) {
-    if (page === 'stok-keranjang') loadStokKeranjang();
-    if (page === 'isi-stok') {
-      if (currentUserData?.role === 'mitra') {
-        showToast('Halaman ini hanya untuk karyawan & owner', 'info');
-        navigateTo('dashboard');
-        return;
-      }
-      loadIsiStok();
-    }
-    if (page === 'rekap') loadRekap();
-  };
+
 
   /* ==========================================================
      STOK KERANJANG
@@ -2579,7 +2942,7 @@
               <div style="font-weight:800;font-size:16px">${mitra.nama}</div>
               ${kritisWarning}
             </div>
-            <button class="btn btn-primary btn-sm" onclick="navigateTo('isi-stok');window._prefillMitra='${mitra.id}'">📦 Isi Stok</button>
+            <button class="btn btn-primary btn-sm" onclick="window._prefillMitra='${mitra.id}';navigateTo('isi-stok')">📦 Isi Stok</button>
           </div>
           <div class="table-wrap">
             <table>
@@ -2966,13 +3329,13 @@
 
   let rekapView = 'tabel'; // 'tabel' | 'matrix'
 
-  function setRekapView(view) {
+  window.setRekapView = function(view) {
     rekapView = view;
     document.getElementById('btn-view-tabel').className = `btn btn-sm ${view === 'tabel' ? 'btn-primary' : 'btn-secondary'}`;
     document.getElementById('btn-view-matrix').className = `btn btn-sm ${view === 'matrix' ? 'btn-primary' : 'btn-secondary'}`;
   }
 
-  async function loadRekap() {
+  window.loadRekap = async function() {
     // Default: 7 hari terakhir
     const tglMulaiEl = document.getElementById('rekap-tgl-mulai');
     const tglSelesaiEl = document.getElementById('rekap-tgl-selesai');
@@ -3054,7 +3417,40 @@
       }
 
       if (rekapView === 'matrix') {
-        renderRekapMatrix(content, docs);
+        // Query juga eceran_pengisian untuk data "+tambah"
+        let pengisianDocs = [];
+        try {
+          let qPengisian = query(
+            collection(db, 'eceran_pengisian'),
+            where('tanggal_pasaran', '>=', Timestamp.fromDate(startDate)),
+            where('tanggal_pasaran', '<=', Timestamp.fromDate(endDate))
+          );
+          if (filterMitraId) {
+            qPengisian = query(
+              collection(db, 'eceran_pengisian'),
+              where('mitra_id', '==', filterMitraId),
+              where('tanggal_pasaran', '>=', Timestamp.fromDate(startDate)),
+              where('tanggal_pasaran', '<=', Timestamp.fromDate(endDate))
+            );
+          }
+          const pSnap = await getDocs(qPengisian);
+          pengisianDocs = pSnap.docs.map(d => d.data());
+        } catch(e) { console.warn('Pengisian query error:', e.message); }
+
+        // Query stok_eceran sekarang (untuk reverse calc stok_awal)
+        let stokSekarangMap = {};
+        try {
+          let qStok = filterMitraId
+            ? query(collection(db, 'stok_eceran'), where('mitra_id', '==', filterMitraId))
+            : collection(db, 'stok_eceran');
+          const sSnap = await getDocs(qStok);
+          sSnap.docs.forEach(d => {
+            const data = d.data();
+            stokSekarangMap[`${data.mitra_id}_${data.produk_id}`] = data.stok_pcs || 0;
+          });
+        } catch(e) {}
+
+        renderRekapMatrix(content, docs, pengisianDocs, stokSekarangMap);
       } else {
         renderRekapTabel(content, docs);
       }
@@ -3171,7 +3567,7 @@
     }).catch(err => showToast('Gagal ambil detail: ' + err.message, 'error'));
   };
 
-  function renderRekapMatrix(container, docs) {
+  function renderRekapMatrix(container, docs, pengisianDocs = [], stokSekarangMap = {}) {
     // Kumpulkan semua tanggal unik (format YYYY-MM-DD)
     const tglSet = new Set();
     const produkSet = new Set();
@@ -3188,6 +3584,36 @@
         produkSet.add(`${item.produk_id}|||${item.produk_nama}`);
         const key = `${tgl}_${item.produk_id}`;
         lakuMap[key] = (lakuMap[key] || 0) + item.jumlah_pcs;
+      });
+    });
+
+    // Dari pengisian (untuk kolom +tambah)
+    const pengisianByMitra = {};
+    pengisianDocs.forEach(data => {
+      const tgl = data.tanggal_pasaran?.toDate
+        ? data.tanggal_pasaran.toDate().toISOString().split('T')[0]
+        : '';
+      if (!tgl) return;
+      tglSet.add(tgl);
+      produkSet.add(`${data.produk_id}|||${data.produk_nama}`);
+      const key = `${tgl}_${data.produk_id}`;
+      tambahMap[key] = (tambahMap[key] || 0) + (data.jumlah_pcs || 0);
+      const mpKey = `${data.mitra_id}_${data.produk_id}`;
+      if (!pengisianByMitra[mpKey]) pengisianByMitra[mpKey] = [];
+      pengisianByMitra[mpKey].push({ tgl, jumlah: data.jumlah_pcs || 0 });
+    });
+
+    // Mapping penjualan per mitra (untuk reverse calc stok_awal)
+    const lakuByMitra = {};
+    docs.filter(d => d.status === 'dikonfirmasi').forEach(data => {
+      const tgl = data.tanggal_pasaran?.toDate
+        ? data.tanggal_pasaran.toDate().toISOString().split('T')[0]
+        : '';
+      if (!tgl) return;
+      (data.items || []).forEach(item => {
+        const mpKey = `${data.mitra_id}_${item.produk_id}`;
+        if (!lakuByMitra[mpKey]) lakuByMitra[mpKey] = [];
+        lakuByMitra[mpKey].push({ tgl, jumlah: item.jumlah_pcs || 0 });
       });
     });
 
@@ -3217,9 +3643,20 @@
         const key = `${tgl}_${prod.id}`;
         const laku = lakuMap[key] || 0;
         const tambah = tambahMap[key] || 0;
-        return `<td style="text-align:center;padding:7px 8px;font-size:12px">
-          <div style="color:var(--red-text);font-weight:${laku ? '700' : '400'}">${laku || '—'}</div>
-          ${tambah ? `<div style="color:var(--green);font-size:11px">+${tambah}</div>` : ''}
+
+        let stokAwalLabel = '?';
+        if (Object.keys(stokSekarangMap).length === 1) {
+          const mpKey = Object.keys(stokSekarangMap)[0].split('_')[0] + '_' + prod.id;
+          const stokSekarang = stokSekarangMap[mpKey] || 0;
+          const lakuSetelah = (lakuByMitra[mpKey] || []).filter(l => l.tgl >= tgl).reduce((s,l) => s + l.jumlah, 0);
+          const tambahSetelah = (pengisianByMitra[mpKey] || []).filter(p => p.tgl >= tgl).reduce((s,p) => s + p.jumlah, 0);
+          stokAwalLabel = (stokSekarang + lakuSetelah - tambahSetelah).toString();
+        }
+
+        return `<td style="text-align:center;padding:7px 8px;font-size:11.5px;line-height:1.4">
+          <div style="color:var(--text-muted);font-weight:500" title="Stok awal">${stokAwalLabel}</div>
+          <div style="color:var(--red-text);font-weight:${laku ? '700' : '400'}" title="Laku">${laku || '—'}</div>
+          ${tambah ? `<div style="color:var(--green);font-weight:600" title="Tambah">+${tambah}</div>` : '<div>&nbsp;</div>'}
         </td>`;
       }).join('');
       return `<tr>
@@ -3230,7 +3667,7 @@
 
     container.innerHTML = `
       <div class="info-box info-box-gray mb-16" style="font-size:12px">
-        📊 Format: <strong style="color:var(--red-text)">merah = laku (pcs)</strong> | <strong style="color:var(--green)">hijau = tambah stok (+pcs)</strong>. Hanya transaksi dikonfirmasi.
+        📊 Format per sel (atas ke bawah): <strong style="color:var(--text-muted)">abu = stok awal</strong> · <strong style="color:var(--red-text)">merah = laku</strong> · <strong style="color:var(--green)">hijau = tambah stok</strong>. Stok awal hanya akurat jika filter mitra dipilih (bukan "Semua Mitra"). Hanya transaksi dikonfirmasi.
       </div>
       <div class="table-wrap">
         <table style="font-size:13px">
@@ -3245,11 +3682,1015 @@
       </div>`;
   }
 
-  // ============================================================
+// ============================================================
   // BAGIAN 3: Master Produk, Master Mitra, Set Target,
   //           Analisis Profit, Pengaturan
-  // Tambahkan kode di sini.
+  // TEMPEL PERSIS DI SINI, GANTIKAN komentar placeholder lama
   // ============================================================
+
+  /* ==========================================================
+     NAVIGASI EXTENSION — sambung ke navigateTo() Bagian 1
+  ========================================================== */
+  window._navigateExtension = function(page) {
+    // Page dari Bagian 2
+    if (page === 'stok-keranjang') {
+      loadStokKeranjang();
+    }
+    if (page === 'isi-stok') {
+      if (currentUserData?.role === 'mitra') {
+        showToast('Halaman ini hanya untuk karyawan & owner', 'info');
+        navigateTo('dashboard');
+        return;
+      }
+      loadIsiStok();
+    }
+    if (page === 'rekap') {
+      loadRekap();
+    }
+    // Page dari Bagian 3
+    if (page === 'master-produk') {
+      if (!isOwner()) { navigateTo('dashboard'); showToast('Halaman ini khusus owner', 'info'); return; }
+      loadMasterProduk();
+    }
+    if (page === 'master-mitra') {
+      if (!isOwner()) { navigateTo('dashboard'); showToast('Halaman ini khusus owner', 'info'); return; }
+      loadMasterMitra();
+    }
+    if (page === 'set-target') {
+      if (!isOwner()) { navigateTo('dashboard'); showToast('Halaman ini khusus owner', 'info'); return; }
+      loadSetTarget();
+    }
+    if (page === 'analisis-profit') {
+      if (!canSeeProfit()) { navigateTo('dashboard'); showToast('Halaman ini khusus owner & karyawan', 'info'); return; }
+      initAnalisisProfit();
+    }
+    if (page === 'pengaturan') {
+      if (!isOwner()) { navigateTo('dashboard'); showToast('Halaman ini khusus owner', 'info'); return; }
+      loadPengaturan();
+    }
+  };
+
+  /* ==========================================================
+     SHORTHAND FIREBASE (dari window globals Bagian 1)
+  ========================================================== */
+  function _db()  { return window._db; }
+  const _ts      = () => window._serverTimestamp();
+  const _inc     = (n) => window._increment(n);
+  const _wb      = () => window._writeBatch(window._db);
+
+  /* ==========================================================
+     CSS TAMBAHAN BAGIAN 3
+  ========================================================== */
+  (function addB3Styles() {
+    const style = document.createElement('style');
+    style.textContent = `
+  
+      .margin-red   { color: var(--red-text); font-weight:700; }
+      .margin-amber { color: var(--amber-text); font-weight:700; }
+      .margin-green { color: var(--green-text); font-weight:700; }
+      .table-wrap { overflow-x: auto; }
+      .table-wrap table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+      .table-wrap th, .table-wrap td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); }
+      .table-wrap th { font-size: 12px; font-weight: 700; color: var(--text-secondary); background: var(--bg); }
+      .table-wrap tr:last-child td { border-bottom: none; }
+      .table-wrap tr:hover td { background: var(--bg); }
+      .inline-input { width: 70px; padding: 4px 8px; border: 1px solid var(--input-border); border-radius: 6px; font-size:13px; text-align:center; font-family:inherit; }
+      .inline-input:focus { outline: none; border-color: var(--green); box-shadow: 0 0 0 2px rgba(29,158,117,0.15); }
+      .stat-card-sm { background: var(--white); border-radius: var(--radius); padding: 16px 18px; box-shadow: var(--shadow); }
+      .stat-card-sm .stat-value { font-size: 22px; font-weight: 800; color: var(--text-primary); margin: 4px 0; }
+      .stat-card-sm .stat-label { font-size: 12px; color: var(--text-muted); font-weight: 600; }
+      .stat-card-sm .stat-icon  { font-size: 22px; margin-bottom: 6px; }
+      .tab-btn-active { background: var(--green) !important; color: #fff !important; }
+      .highlight-row td { background: var(--green-light) !important; }
+      @media print {
+        #ap-print-header, #ap-print-footer, #ap-print-chart { display: block !important; }
+        #ap-custom-range { display:none !important; }
+        .no-print { display: none !important; }
+      }
+    `;
+    document.head.appendChild(style);
+  })();
+
+  /* ==========================================================
+     ██████  MASTER PRODUK
+  ========================================================== */
+  let _masterProdukTab = 'semua';
+  let _editProdukId = null;
+  let _editProdukData = null;
+
+  window.setMasterProdukTab = function(tab) {
+    _masterProdukTab = tab;
+    ['semua','khusus','grosir'].forEach(t => {
+      const el = document.getElementById(`tab-${t === 'semua' ? 'semua-eceran' : t === 'khusus' ? 'khusus-eceran' : 'juga-grosir'}`);
+      if (el) { el.className = tab === t ? 'btn btn-primary btn-sm' : 'btn btn-secondary btn-sm'; }
+    });
+    loadMasterProduk();
+  }
+
+  async function loadMasterProduk() {
+    const cont = document.getElementById('master-produk-content');
+    cont.innerHTML = '<div class="loading-state"><div class="loading-spinner"></div> Memuat...</div>';
+    try {
+      const snap = await window._getDocs(window._collection(window._db, 'produk'));
+      let produkList = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+      if (_masterProdukTab === 'semua') {
+        produkList = produkList.filter(p => p.eceran?.aktif === true);
+      } else if (_masterProdukTab === 'khusus') {
+        produkList = produkList.filter(p => p.eceran?.aktif === true && p.aktif === false);
+      } else {
+        produkList = produkList.filter(p => p.eceran?.aktif === true && p.aktif === true);
+      }
+
+      if (!produkList.length) {
+        cont.innerHTML = `<div class="empty-state"><span class="empty-icon">🏷️</span><h3>Tidak ada produk</h3><p>Tambahkan produk eceran menggunakan tombol di atas.</p></div>`;
+        return;
+      }
+
+      const rows = produkList.map(p => {
+        const harga = p.eceran?.harga_pcs ?? 0;
+        const modal = p.eceran?.modal_pcs ?? 0;
+        const marginRp = harga - modal;
+        const marginPct = harga > 0 ? ((marginRp / harga) * 100).toFixed(1) : 0;
+        const marginClass = marginPct < 10 ? 'margin-red' : marginPct <= 25 ? 'margin-amber' : 'margin-green';
+        const kategori = p.eceran?.kategori || '-';
+        return `<tr>
+          <td><strong>${p.nama}</strong></td>
+          <td><span class="badge badge-gray">${kategori}</span></td>
+          <td>${formatRupiah(modal)}</td>
+          <td>${formatRupiah(harga)}</td>
+          <td>${formatRupiah(marginRp)}</td>
+          <td class="${marginClass}">${marginPct}%</td>
+          <td><span class="badge ${p.eceran?.aktif ? 'badge-green' : 'badge-red'}">${p.eceran?.aktif ? 'Aktif' : 'Nonaktif'}</span></td>
+          <td>
+            <div style="display:flex;gap:6px">
+              <button class="btn btn-secondary btn-sm" onclick="openEditProduk('${p.id}')">✏️ Edit</button>
+              ${p.eceran?.aktif ? `<button class="btn btn-danger btn-sm" onclick="konfirmasiNonaktifProduk('${p.id}','${p.nama.replace(/'/g,"\\'")}')">Nonaktifkan</button>` : ''}
+            </div>
+          </td>
+        </tr>`;
+      }).join('');
+
+      cont.innerHTML = `
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>Nama Produk</th><th>Kategori</th>
+              <th>Modal (Rp/pcs)</th><th>Harga (Rp/pcs)</th>
+              <th>Margin (Rp)</th><th>Margin (%)</th>
+              <th>Status</th><th>Aksi</th>
+            </tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+        <div style="font-size:12px;color:var(--text-muted);margin-top:12px">
+          💡 Perubahan modal TIDAK mempengaruhi transaksi yang sudah dikonfirmasi (modal di-snapshot saat konfirmasi).
+        </div>`;
+    } catch(e) {
+      cont.innerHTML = `<div class="empty-state"><span class="empty-icon">⚠️</span><h3>Error</h3><p>${e.message}</p></div>`;
+    }
+  }
+
+  const KATEGORI_OPTIONS = ['sprei','sajadah','sarung','batik','mukena','lain'];
+
+  window.openModalTambahProduk = function() {
+    _editProdukId = null;
+    _editProdukData = null;
+    document.getElementById('modal-produk-title').textContent = 'Tambah Produk Eceran Baru';
+    document.getElementById('modal-produk-body').innerHTML = `
+      <div class="form-group"><label>Nama Produk <span style="color:var(--red-text)">*</span></label>
+        <input type="text" class="input" id="p-nama" placeholder="cth: Sprei Polos" /></div>
+      <div class="form-group"><label>Kategori</label>
+        <select class="input" id="p-kategori">
+          ${KATEGORI_OPTIONS.map(k => `<option value="${k}">${k.charAt(0).toUpperCase()+k.slice(1)}</option>`).join('')}
+        </select></div>
+      <div class="form-group"><label>Harga Jual per Pcs <span style="color:var(--red-text)">*</span></label>
+        <input type="number" class="input" id="p-harga" min="0" placeholder="0" oninput="previewMargin()" /></div>
+      <div class="form-group"><label>Modal per Pcs <span style="color:var(--red-text)">*</span></label>
+        <input type="number" class="input" id="p-modal" min="0" placeholder="0" oninput="previewMargin()" /></div>
+      <div id="p-margin-preview" style="font-size:13px;margin-top:4px;color:var(--text-muted)"></div>`;
+    openModal('modal-produk-eceran');
+  }
+
+  window.openEditProduk = async function(id) {
+    _editProdukId = id;
+    const snap = await window._getDoc(window._doc(window._db, 'produk', id));
+    _editProdukData = { id, ...snap.data() };
+    const p = _editProdukData;
+    const isGrosir = p.aktif === true;
+    document.getElementById('modal-produk-title').textContent = 'Edit Produk Eceran';
+    document.getElementById('modal-produk-body').innerHTML = `
+      <div class="form-group"><label>Nama Produk</label>
+        <input type="text" class="input" value="${p.nama}" ${isGrosir ? 'readonly style="background:var(--bg);color:var(--text-muted)"' : 'id="p-nama"'} /></div>
+      ${isGrosir ? `<div class="info-box info-box-blue mb-16" style="font-size:12px">ℹ️ Produk ini juga dijual di grosir. Harga & modal grosir hanya bisa diubah dari aplikasi grosir.</div>` : '<input type="hidden" id="p-nama" value="'+p.nama+'" />'}
+      <div class="form-group"><label>Kategori Eceran</label>
+        <select class="input" id="p-kategori">
+          ${KATEGORI_OPTIONS.map(k => `<option value="${k}" ${(p.eceran?.kategori||'lain')===k?'selected':''}>${k.charAt(0).toUpperCase()+k.slice(1)}</option>`).join('')}
+        </select></div>
+      <div class="form-group"><label>Harga Jual per Pcs (Eceran)</label>
+        <input type="number" class="input" id="p-harga" min="0" value="${p.eceran?.harga_pcs??0}" oninput="previewMargin()" /></div>
+      <div class="form-group"><label>Modal per Pcs (Eceran)</label>
+        <input type="number" class="input" id="p-modal" min="0" value="${p.eceran?.modal_pcs??0}" oninput="previewMargin()" /></div>
+      <div id="p-margin-preview" style="font-size:13px;margin-top:4px"></div>`;
+    openModal('modal-produk-eceran');
+    previewMargin();
+  }
+
+  window.previewMargin = function() {
+    const h = parseFloat(document.getElementById('p-harga')?.value) || 0;
+    const m = parseFloat(document.getElementById('p-modal')?.value) || 0;
+    const marginRp = h - m;
+    const pct = h > 0 ? ((marginRp/h)*100).toFixed(1) : 0;
+    const cls = pct < 10 ? 'var(--red-text)' : pct <= 25 ? 'var(--amber-text)' : 'var(--green-text)';
+    const el = document.getElementById('p-margin-preview');
+    if (el) el.innerHTML = `<span style="color:${cls};font-weight:700">Margin: ${formatRupiah(marginRp)} (${pct}%)</span>`;
+  };
+
+  window.simpanProdukEceran = async function() {
+    const btn = document.getElementById('btn-simpan-produk');
+    const harga = parseFloat(document.getElementById('p-harga')?.value) || 0;
+    const modal = parseFloat(document.getElementById('p-modal')?.value) || 0;
+    const kategori = document.getElementById('p-kategori')?.value || 'lain';
+    if (harga <= 0) { showToast('Harga harus lebih dari 0', 'error'); return; }
+    btn.disabled = true; btn.textContent = 'Menyimpan...';
+    try {
+      if (_editProdukId) {
+        // Update
+        await window._updateDoc(window._doc(window._db, 'produk', _editProdukId), {
+          'eceran.aktif': true,
+          'eceran.harga_pcs': harga,
+          'eceran.modal_pcs': modal,
+          'eceran.kategori': kategori,
+          'eceran.updated_at': _ts()
+        });
+      } else {
+        // Tambah baru
+        const nama = document.getElementById('p-nama')?.value?.trim();
+        if (!nama) { showToast('Nama produk tidak boleh kosong', 'error'); btn.disabled=false; btn.textContent='💾 Simpan'; return; }
+        await window._addDoc(window._collection(window._db, 'produk'), {
+          nama, sumber: 'eceran',
+          harga_default: 0, modal_per_kodi: 0, pcs_per_kodi: 1, harga_per_pcs: 0,
+          aktif: false,
+          eceran: { aktif: true, harga_pcs: harga, modal_pcs: modal, kategori,
+            created_at: _ts(), updated_at: _ts() }
+        });
+      }
+      closeModal('modal-produk-eceran');
+      showToast('Produk berhasil disimpan');
+      loadMasterProduk();
+    } catch(e) {
+      showToast('Error: ' + e.message, 'error');
+    }
+    btn.disabled = false; btn.textContent = '💾 Simpan';
+  };
+
+  let _nonaktifProdukId = null;
+  window.konfirmasiNonaktifProduk = function(id, nama) {
+    _nonaktifProdukId = id;
+    document.getElementById('btn-konfirmasi-nonaktif-produk').onclick = async () => {
+      try {
+        await window._updateDoc(window._doc(window._db, 'produk', id), { 'eceran.aktif': false });
+        closeModal('modal-nonaktif-produk');
+        showToast(`${nama} dinonaktifkan dari eceran`);
+        loadMasterProduk();
+      } catch(e) { showToast('Error: '+e.message,'error'); }
+    };
+    openModal('modal-nonaktif-produk');
+  };
+
+  /* ==========================================================
+     ██████  MASTER MITRA
+  ========================================================== */
+  let _mitraListCache = [];
+  let _mitraUserMap = {};
+
+  async function loadMasterMitra() {
+    const cont = document.getElementById('master-mitra-content');
+    cont.innerHTML = '<div class="loading-state"><div class="loading-spinner"></div></div>';
+    try {
+      const [mitraSnap, usersSnap] = await Promise.all([
+        window._getDocs(window._collection(window._db, 'mitra')),
+        window._getDocs(window._query(window._collection(window._db, 'users'), window._where('role','==','mitra')))
+      ]);
+      _mitraListCache = mitraSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      _mitraUserMap = {};
+      usersSnap.docs.forEach(d => {
+        const data = d.data();
+        if (data.mitra_id) _mitraUserMap[data.mitra_id] = { uid: d.id, ...data };
+      });
+
+      if (!_mitraListCache.length) {
+        cont.innerHTML = '<div class="empty-state"><span class="empty-icon">👥</span><h3>Belum ada mitra</h3><p>Tambahkan mitra menggunakan tombol di atas.</p></div>';
+        return;
+      }
+
+      const rows = _mitraListCache.map(m => {
+        const user = _mitraUserMap[m.id];
+        const email = user ? (user.email || '-') : '-';
+        const tgl = m.created_at ? formatTanggal(m.created_at) : '-';
+        return `<tr>
+          <td><strong>${m.nama}</strong></td>
+          <td style="font-size:12px;color:var(--text-muted)">${email}</td>
+          <td><span class="badge ${m.aktif ? 'badge-green':'badge-red'}">${m.aktif?'Aktif':'Nonaktif'}</span></td>
+          <td style="font-size:12px">${tgl}</td>
+          <td>
+            <div style="display:flex;gap:6px;flex-wrap:wrap">
+              <button class="btn btn-secondary btn-sm" onclick="resetPasswordMitra('${m.id}')">🔑 Reset PW</button>
+              ${m.aktif ? `<button class="btn btn-danger btn-sm" onclick="nonaktifkanMitra('${m.id}','${m.nama.replace(/'/g,"\\'")}')">Nonaktifkan</button>` : ''}
+            </div>
+          </td>
+        </tr>`;
+      }).join('');
+
+      cont.innerHTML = `<div class="table-wrap"><table>
+        <thead><tr><th>Nama Mitra</th><th>Email Login</th><th>Status</th><th>Dibuat</th><th>Aksi</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table></div>`;
+    } catch(e) {
+      cont.innerHTML = `<div class="empty-state"><span class="empty-icon">⚠️</span><h3>Error</h3><p>${e.message}</p></div>`;
+    }
+  }
+
+  window.openModalTambahMitra = function() {
+    document.getElementById('mitra-nama-input').value = '';
+    document.getElementById('mitra-email-input').value = '';
+    document.getElementById('mitra-password-input').value = '';
+    openModal('modal-tambah-mitra');
+  }
+
+  window.autoGeneratePassword = function() {
+    const nama = document.getElementById('mitra-nama-input').value.trim();
+    if (nama.length >= 3) {
+      const base = nama.toLowerCase().replace(/\s+/g,'').replace(/[^a-z0-9]/g,'');
+      const rand = Math.floor(1000 + Math.random() * 9000);
+      document.getElementById('mitra-password-input').value = base + rand;
+    }
+  };
+
+  window.generatePassword = function() {
+    const nama = document.getElementById('mitra-nama-input').value.trim() || 'mitra';
+    const base = nama.toLowerCase().replace(/\s+/g,'').replace(/[^a-z0-9]/g,'');
+    const rand = Math.floor(1000 + Math.random() * 9000);
+    document.getElementById('mitra-password-input').value = base + rand;
+  };
+
+  window.salinPassword = function() {
+    const pw = document.getElementById('mitra-password-input').value;
+    navigator.clipboard.writeText(pw).then(() => showToast('Password disalin!'));
+  };
+
+  window.simpanMitraBaru = async function() {
+    const btn = document.getElementById('btn-simpan-mitra');
+    const nama = document.getElementById('mitra-nama-input').value.trim();
+    const email = document.getElementById('mitra-email-input').value.trim();
+    const password = document.getElementById('mitra-password-input').value.trim();
+    if (!nama || !email || !password) { showToast('Semua field wajib diisi', 'error'); return; }
+    if (password.length < 6) { showToast('Password minimal 6 karakter', 'error'); return; }
+    if (!/\S+@\S+\.\S+/.test(email)) { showToast('Format email tidak valid', 'error'); return; }
+
+    btn.disabled = true; btn.textContent = 'Membuat akun...';
+    try {
+      // 1. Buat Auth via REST (owner tidak logout)
+      const res = await fetch(
+        `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${window._firebaseConfig.apiKey}`,
+        { method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ email, password, returnSecureToken: true }) }
+      );
+      const data = await res.json();
+      if (data.error) throw new Error(data.error.message);
+      const uid = data.localId;
+
+      // 2. Buat dokumen mitra
+      const mitraId = nama.toLowerCase().replace(/\s+/g,'_').replace(/[^a-z0-9_]/g,'');
+      await window._setDoc(window._doc(window._db, 'mitra', mitraId), {
+        nama, aktif: true, created_at: _ts()
+      });
+
+      // 3. Buat dokumen users
+      await window._setDoc(window._doc(window._db, 'users', uid), {
+        nama, role: 'mitra', mitra_id: mitraId, aktif: true,
+        email, createdAt: _ts()
+      });
+
+      closeModal('modal-tambah-mitra');
+
+      // Tampilkan sukses dengan kredensial
+      document.getElementById('sukses-mitra-email').textContent = email;
+      document.getElementById('sukses-mitra-password').textContent = password;
+      window._lastMitraKredensial = { email, password, nama };
+      openModal('modal-mitra-sukses');
+      loadMasterMitra();
+    } catch(e) {
+      showToast('Gagal: ' + e.message, 'error');
+    }
+    btn.disabled = false; btn.textContent = '💾 Simpan & Buat Akun';
+  };
+
+  window.salinKredensialMitra = function() {
+    const k = window._lastMitraKredensial;
+    if (!k) return;
+    const txt = `Akun Mitra Batik AN Eceran\nNama: ${k.nama}\nEmail: ${k.email}\nPassword: ${k.password}`;
+    navigator.clipboard.writeText(txt).then(() => showToast('Kredensial disalin!'));
+  };
+
+  window.resetPasswordMitra = async function(mitraId) {
+    const user = _mitraUserMap[mitraId];
+    if (!user?.email) { showToast('Email mitra tidak ditemukan', 'error'); return; }
+    try {
+      const { sendPasswordResetEmail } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js');
+      await sendPasswordResetEmail(window._auth, user.email);
+      showToast(`Email reset dikirim ke ${user.email}`);
+    } catch(e) {
+      showToast('Gagal kirim reset: ' + e.message, 'error');
+    }
+  };
+
+  window.nonaktifkanMitra = function(mitraId, nama) {
+    document.getElementById('modal-nonaktif-mitra-text').textContent =
+      `Mitra "${nama}" tidak akan bisa login lagi. Lanjutkan?`;
+    document.getElementById('btn-konfirmasi-nonaktif-mitra').onclick = async () => {
+      try {
+        const batch = _wb();
+        batch.update(window._doc(window._db, 'mitra', mitraId), { aktif: false });
+        const user = _mitraUserMap[mitraId];
+        if (user?.uid) batch.update(window._doc(window._db, 'users', user.uid), { aktif: false });
+        await batch.commit();
+        closeModal('modal-nonaktif-mitra');
+        showToast(`${nama} dinonaktifkan`);
+        loadMasterMitra();
+      } catch(e) { showToast('Error: '+e.message,'error'); }
+    };
+    openModal('modal-nonaktif-mitra');
+  };
+
+  /* ==========================================================
+     ██████  SET TARGET KERANJANG
+  ========================================================== */
+  let _targetPendingChanges = {};
+  let _targetMitraList = [];
+  let _targetProdukList = [];
+  let _targetStokMap = {};
+
+  async function loadSetTarget() {
+    const cont = document.getElementById('set-target-content');
+    cont.innerHTML = '<div class="loading-state"><div class="loading-spinner"></div> Memuat...</div>';
+    try {
+      const [mitraSnap, produkSnap, stokEceranSnap] = await Promise.all([
+        window._getDocs(window._query(window._collection(window._db, 'mitra'), window._where('aktif','==',true))),
+        window._getDocs(window._collection(window._db, 'produk')),
+        window._getDocs(window._collection(window._db, 'stok_eceran'))
+      ]);
+
+      _targetMitraList = mitraSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      _targetProdukList = produkSnap.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .filter(p => p.eceran?.aktif === true);
+      _targetStokMap = {};
+      stokEceranSnap.docs.forEach(d => {
+        const data = d.data();
+        _targetStokMap[`${data.mitra_id}_${data.produk_id}`] = data;
+      });
+      _targetPendingChanges = {};
+
+      if (!_targetProdukList.length || !_targetMitraList.length) {
+        cont.innerHTML = '<div class="empty-state"><span class="empty-icon">🎯</span><h3>Belum ada data</h3><p>Tambah produk eceran dan mitra terlebih dahulu.</p></div>';
+        return;
+      }
+
+      const mitraHeaders = _targetMitraList.map(m => `<th style="text-align:center;min-width:100px">${m.nama}</th>`).join('');
+      const rows = _targetProdukList.map(p => {
+        const cells = _targetMitraList.map(m => {
+          const key = `${m.id}_${p.id}`;
+          const target = _targetStokMap[key]?.stok_target_pcs ?? 0;
+          return `<td style="text-align:center">
+            <input type="number" class="inline-input" min="0"
+              value="${target}"
+              data-key="${key}"
+              data-mitra-id="${m.id}"
+              data-mitra-nama="${m.nama}"
+              data-produk-id="${p.id}"
+              data-produk-nama="${p.nama}"
+              onchange="trackTargetChange(this)"
+              onkeydown="if(event.key==='Enter'){this.blur()}" />
+          </td>`;
+        }).join('');
+        return `<tr>
+          <td style="font-weight:600;white-space:nowrap;font-size:13px">${p.nama}<br>
+            <span style="font-size:11px;color:var(--text-muted)">${p.eceran?.kategori||''}</span></td>
+          ${cells}
+        </tr>`;
+      }).join('');
+
+      cont.innerHTML = `
+        <div class="info-box info-box-blue mb-16" style="font-size:12px">
+          💡 Stok di bawah 50% target akan muncul di indikator "Stok Menipis" di dashboard. Edit nilai lalu klik <strong>Simpan Semua</strong>.
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Produk</th>${mitraHeaders}</tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>`;
+
+      // Isi dropdown salin target
+      const opts = _targetMitraList.map(m => `<option value="${m.id}">${m.nama}</option>`).join('');
+      document.getElementById('salin-target-dari').innerHTML = opts;
+      document.getElementById('salin-target-ke').innerHTML = opts;
+    } catch(e) {
+      cont.innerHTML = `<div class="empty-state"><span class="empty-icon">⚠️</span><h3>Error</h3><p>${e.message}</p></div>`;
+    }
+  }
+
+  window.trackTargetChange = function(input) {
+    const key = input.dataset.key;
+    _targetPendingChanges[key] = {
+      mitraId: input.dataset.mitraId,
+      mitraNama: input.dataset.mitraNama,
+      produkId: input.dataset.produkId,
+      produkNama: input.dataset.produkNama,
+      target: parseInt(input.value) || 0
+    };
+  };
+
+  window.simpanSemuaTarget = async function() {
+    const keys = Object.keys(_targetPendingChanges);
+    if (!keys.length) { showToast('Tidak ada perubahan yang perlu disimpan', 'info'); return; }
+    try {
+      const batch = _wb();
+      keys.forEach(key => {
+        const c = _targetPendingChanges[key];
+        const ref = window._doc(window._db, 'stok_eceran', key);
+        batch.set(ref, {
+          mitra_id: c.mitraId, mitra_nama: c.mitraNama,
+          produk_id: c.produkId, produk_nama: c.produkNama,
+          stok_target_pcs: c.target, updated_at: _ts()
+        }, { merge: true });
+      });
+      await batch.commit();
+      _targetPendingChanges = {};
+      showToast(`${keys.length} target berhasil disimpan`);
+    } catch(e) {
+      showToast('Error: '+e.message,'error');
+    }
+  };
+
+  window.openModalSalinTarget = function() { openModal('modal-salin-target'); };
+
+  window.eksekusiSalinTarget = async function() {
+    const dariId = document.getElementById('salin-target-dari').value;
+    const keId   = document.getElementById('salin-target-ke').value;
+    if (dariId === keId) { showToast('Pilih mitra yang berbeda', 'error'); return; }
+    const dariNama = _targetMitraList.find(m => m.id === dariId)?.nama || dariId;
+    const keNama   = _targetMitraList.find(m => m.id === keId)?.nama || keId;
+    try {
+      const batch = _wb();
+      _targetProdukList.forEach(p => {
+        const sumberKey = `${dariId}_${p.id}`;
+        const targetKey = `${keId}_${p.id}`;
+        const target = _targetStokMap[sumberKey]?.stok_target_pcs ?? 0;
+        const ref = window._doc(window._db, 'stok_eceran', targetKey);
+        batch.set(ref, {
+          mitra_id: keId, mitra_nama: keNama,
+          produk_id: p.id, produk_nama: p.nama,
+          stok_target_pcs: target, updated_at: _ts()
+        }, { merge: true });
+      });
+      await batch.commit();
+      closeModal('modal-salin-target');
+      showToast(`Target disalin dari ${dariNama} ke ${keNama}`);
+      loadSetTarget();
+    } catch(e) {
+      showToast('Error: '+e.message,'error');
+    }
+  };
+
+  /* ==========================================================
+     ██████  ANALISIS PROFIT
+  ========================================================== */
+  let _apPeriode = 'hari';
+  let _apAllTrx = [];
+  let _apProdukShowAll = false;
+  let _apPage = 0;
+  const AP_PAGE_SIZE = 20;
+  let _profitChart = null;
+
+  function initAnalisisProfit() {
+    setAnalisisPeriode('hari', true);
+  }
+
+  window.setAnalisisPeriode = function(p, silent) {
+    _apPeriode = p;
+    ['hari','minggu','bulan','custom'].forEach(t => {
+      const el = document.getElementById(`ap-tab-${t}`);
+      if (el) el.className = t === p ? 'btn btn-primary btn-sm' : 'btn btn-secondary btn-sm';
+    });
+    const customEl = document.getElementById('ap-custom-range');
+    if (customEl) customEl.style.display = p === 'custom' ? 'flex' : 'none';
+    if (p !== 'custom') loadAnalisisProfit();
+  };
+
+  function getApDateRange() {
+    const now = new Date();
+    let start, end;
+    if (_apPeriode === 'hari') {
+      start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      end   = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+    } else if (_apPeriode === 'minggu') {
+      const day = now.getDay();
+      const diff = now.getDate() - day + (day === 0 ? -6 : 1);
+      start = new Date(now.setDate(diff)); start.setHours(0,0,0,0);
+      end   = new Date(); end.setHours(23,59,59,999);
+    } else if (_apPeriode === 'bulan') {
+      start = new Date(now.getFullYear(), now.getMonth(), 1);
+      end   = new Date(now.getFullYear(), now.getMonth()+1, 0, 23, 59, 59);
+    } else {
+      const mulai = document.getElementById('ap-tgl-mulai')?.value;
+      const selesai = document.getElementById('ap-tgl-selesai')?.value;
+      if (!mulai || !selesai) { showToast('Pilih tanggal mulai dan selesai','error'); return null; }
+      start = new Date(mulai); end = new Date(selesai); end.setHours(23,59,59,999);
+    }
+    return { start, end };
+  }
+
+  window.loadAnalisisProfit = async function() {
+    const range = getApDateRange();
+    if (!range) return;
+    const { start, end } = range;
+    const { Timestamp } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+
+    document.getElementById('ap-ringkasan').innerHTML = '<div class="loading-state" style="grid-column:1/-1"><div class="loading-spinner"></div></div>';
+    document.getElementById('ap-per-mitra').innerHTML = '<div class="loading-state"><div class="loading-spinner"></div></div>';
+    document.getElementById('ap-per-produk').innerHTML = '<div class="loading-state"><div class="loading-spinner"></div></div>';
+    document.getElementById('ap-detail-transaksi').innerHTML = '<div class="loading-state"><div class="loading-spinner"></div></div>';
+
+    try {
+      const snap = await window._getDocs(window._query(
+        window._collection(window._db, 'eceran_penjualan'),
+        window._where('status','==','dikonfirmasi'),
+        window._where('tanggal_pasaran','>=', Timestamp.fromDate(start)),
+        window._where('tanggal_pasaran','<=', Timestamp.fromDate(end)),
+        window._orderBy('tanggal_pasaran','desc')
+      ));
+      _apAllTrx = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      _apPage = 0;
+      renderApRingkasan();
+      renderApPerMitra();
+      renderApPerProduk();
+      renderApTren();
+      renderApDetail();
+    } catch(e) {
+      document.getElementById('ap-ringkasan').innerHTML =
+        `<div class="stat-card-sm" style="grid-column:1/-1"><p style="color:var(--red-text)">Error: ${e.message}</p></div>`;
+    }
+  };
+
+  function renderApRingkasan() {
+    const totalOmzet  = _apAllTrx.reduce((s,t) => s + (t.total||0), 0);
+    const totalModal  = _apAllTrx.reduce((s,t) => s + (t.total_modal||0), 0);
+    const totalProfit = _apAllTrx.reduce((s,t) => s + (t.total_profit||0), 0);
+    const marginPct   = totalOmzet > 0 ? ((totalProfit/totalOmzet)*100).toFixed(1) : 0;
+    document.getElementById('ap-ringkasan').innerHTML = `
+      <div class="stat-card-sm"><div class="stat-icon">💰</div><div class="stat-label">Total Omzet</div><div class="stat-value">${formatRupiah(totalOmzet)}</div></div>
+      <div class="stat-card-sm"><div class="stat-icon">📦</div><div class="stat-label">Total Modal</div><div class="stat-value">${formatRupiah(totalModal)}</div></div>
+      <div class="stat-card-sm"><div class="stat-icon">📈</div><div class="stat-label">Total Profit</div><div class="stat-value" style="color:var(--green-text)">${formatRupiah(totalProfit)}</div></div>
+      <div class="stat-card-sm"><div class="stat-icon">📊</div><div class="stat-label">Margin %</div><div class="stat-value ${marginPct < 10 ? 'margin-red' : marginPct <= 25 ? 'margin-amber' : 'margin-green'}">${marginPct}%</div></div>`;
+  }
+
+  function renderApPerMitra() {
+    const mitraMap = {};
+    _apAllTrx.forEach(t => {
+      if (!mitraMap[t.mitra_id]) mitraMap[t.mitra_id] = { nama: t.mitra_nama, pcs: 0, omzet: 0, modal: 0, profit: 0 };
+      const m = mitraMap[t.mitra_id];
+      m.omzet  += t.total || 0;
+      m.modal  += t.total_modal || 0;
+      m.profit += t.total_profit || 0;
+      (t.items||[]).forEach(i => { m.pcs += i.jumlah_pcs || 0; });
+    });
+    const sorted = Object.values(mitraMap).sort((a,b) => b.profit - a.profit);
+    if (!sorted.length) { document.getElementById('ap-per-mitra').innerHTML = '<div class="empty-state"><p>Tidak ada data</p></div>'; return; }
+    const rows = sorted.map((m, idx) => `
+      <tr class="${idx === 0 ? 'highlight-row' : ''}">
+        <td><strong>${m.nama}</strong></td>
+        <td>${m.pcs} pcs</td>
+        <td>${formatRupiah(m.omzet)}</td>
+        <td>${formatRupiah(m.modal)}</td>
+        <td style="color:var(--green-text);font-weight:700">${formatRupiah(m.profit)}</td>
+        <td class="${m.omzet > 0 && (m.profit/m.omzet)*100 < 10 ? 'margin-red' : (m.profit/m.omzet)*100 <= 25 ? 'margin-amber' : 'margin-green'}">
+          ${m.omzet > 0 ? ((m.profit/m.omzet)*100).toFixed(1) : 0}%</td>
+      </tr>`).join('');
+    document.getElementById('ap-per-mitra').innerHTML = `<div class="table-wrap"><table>
+      <thead><tr><th>Mitra</th><th>Pcs Terjual</th><th>Omzet</th><th>Modal</th><th>Profit</th><th>Margin %</th></tr></thead>
+      <tbody>${rows}</tbody></table></div>`;
+  }
+
+  function renderApPerProduk() {
+    const produkMap = {};
+    _apAllTrx.forEach(t => {
+      (t.items||[]).forEach(i => {
+        if (!produkMap[i.produk_id]) produkMap[i.produk_id] = { nama: i.produk_nama, kategori: '-', pcs: 0, omzet: 0, modal: 0, profit: 0 };
+        const p = produkMap[i.produk_id];
+        p.pcs    += i.jumlah_pcs || 0;
+        p.omzet  += i.subtotal || 0;
+        p.modal  += (i.modal_pcs_snapshot || 0) * (i.jumlah_pcs || 0);
+        p.profit += i.profit_subtotal || 0;
+      });
+    });
+    const sorted = Object.values(produkMap).sort((a,b) => b.profit - a.profit);
+    const display = _apProdukShowAll ? sorted : sorted.slice(0, 10);
+    const btn = document.getElementById('btn-toggle-produk');
+    if (btn) btn.textContent = _apProdukShowAll ? 'Top 10' : 'Semua';
+
+    if (!display.length) { document.getElementById('ap-per-produk').innerHTML = '<div class="empty-state"><p>Tidak ada data</p></div>'; return; }
+    const rows = display.map((p, idx) => `
+      <tr class="${idx === 0 ? 'highlight-row' : ''}">
+        <td><strong>${p.nama}</strong></td>
+        <td><span class="badge badge-gray">${p.kategori}</span></td>
+        <td>${p.pcs} pcs</td>
+        <td>${formatRupiah(p.omzet)}</td>
+        <td>${formatRupiah(p.modal)}</td>
+        <td style="color:var(--green-text);font-weight:700">${formatRupiah(p.profit)}</td>
+        <td class="${p.omzet > 0 && (p.profit/p.omzet)*100 < 10 ? 'margin-red' : 'margin-green'}">
+          ${p.omzet > 0 ? ((p.profit/p.omzet)*100).toFixed(1) : 0}%</td>
+      </tr>`).join('');
+    document.getElementById('ap-per-produk').innerHTML = `<div class="table-wrap"><table>
+      <thead><tr><th>Produk</th><th>Kategori</th><th>Pcs</th><th>Omzet</th><th>Modal</th><th>Profit</th><th>Margin %</th></tr></thead>
+      <tbody>${rows}</tbody></table></div>`;
+  }
+
+  window.toggleProdukView = function() {
+    _apProdukShowAll = !_apProdukShowAll;
+    renderApPerProduk();
+  };
+
+  function renderApTren() {
+    const trenMap = {};
+    _apAllTrx.forEach(t => {
+      if (!t.tanggal_pasaran) return;
+      const dt = t.tanggal_pasaran.toDate ? t.tanggal_pasaran.toDate() : new Date(t.tanggal_pasaran);
+      const tgl = dt.toISOString().split('T')[0];
+      if (!trenMap[tgl]) trenMap[tgl] = { profit: 0, omzet: 0 };
+      trenMap[tgl].profit += t.total_profit || 0;
+      trenMap[tgl].omzet  += t.total || 0;
+    });
+    const sorted = Object.keys(trenMap).sort();
+    const labels = sorted.map(tgl => {
+      const d = new Date(tgl);
+      const hari = ['Min','Sen','Sel','Rab','Kam','Jum','Sab'][d.getDay()];
+      const bulan = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'][d.getMonth()];
+      return `${hari} ${d.getDate()} ${bulan}`;
+    });
+    const profits = sorted.map(k => trenMap[k].profit);
+    const omzets  = sorted.map(k => trenMap[k].omzet);
+
+    const ctx = document.getElementById('chart-profit-tren');
+    if (!ctx) return;
+    if (_profitChart) _profitChart.destroy();
+    _profitChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{
+          label: 'Profit',
+          data: profits,
+          backgroundColor: '#1D9E75',
+          borderRadius: 6,
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => {
+                const i = ctx.dataIndex;
+                return [`Profit: ${formatRupiah(profits[i])}`, `Omzet: ${formatRupiah(omzets[i])}`];
+              }
+            }
+          }
+        },
+        scales: { y: { ticks: { callback: v => 'Rp ' + (v/1000).toFixed(0) + 'rb' } } },
+        onClick: (e, elements) => {
+          if (elements.length > 0) {
+            const tgl = sorted[elements[0].index];
+            filterApDetailByDate(tgl);
+          }
+        }
+      }
+    });
+  }
+
+  function filterApDetailByDate(tgl) {
+    const filtered = _apAllTrx.filter(t => {
+      if (!t.tanggal_pasaran) return false;
+      const dt = t.tanggal_pasaran.toDate ? t.tanggal_pasaran.toDate() : new Date(t.tanggal_pasaran);
+      return dt.toISOString().split('T')[0] === tgl;
+    });
+    renderApDetailData(filtered);
+    document.getElementById('ap-detail-transaksi').scrollIntoView({ behavior: 'smooth' });
+  }
+
+  function renderApDetail() {
+    renderApDetailData(_apAllTrx);
+  }
+
+  function renderApDetailData(trxList) {
+    const start = _apPage * AP_PAGE_SIZE;
+    const end   = start + AP_PAGE_SIZE;
+    const page  = trxList.slice(start, end);
+
+    if (!page.length) {
+      document.getElementById('ap-detail-transaksi').innerHTML = '<div class="empty-state"><span class="empty-icon">📋</span><h3>Tidak ada transaksi</h3></div>';
+      document.getElementById('ap-pagination').innerHTML = '';
+      return;
+    }
+
+    const rows = page.map(t => {
+      const items = t.items || [];
+      const ringkas = items.slice(0, 2).map(i => `${i.produk_nama} ${i.jumlah_pcs} pcs`).join(', ')
+        + (items.length > 2 ? ` +${items.length-2} lainnya` : '');
+      const tgl = t.tanggal_pasaran ? formatTanggal(t.tanggal_pasaran) : '-';
+      return `<tr style="cursor:pointer" onclick="showApDetailModal('${t.id}')">
+        <td style="font-size:12px">${tgl}</td>
+        <td>${t.mitra_nama || '-'}</td>
+        <td style="font-size:12px;color:var(--text-muted)">${ringkas}</td>
+        <td>${formatRupiah(t.total)}</td>
+        <td style="color:var(--green-text);font-weight:700">${formatRupiah(t.total_profit)}</td>
+      </tr>`;
+    }).join('');
+
+    document.getElementById('ap-detail-transaksi').innerHTML = `<div class="table-wrap"><table>
+      <thead><tr><th>Tanggal</th><th>Mitra</th><th>Items</th><th>Omzet</th><th>Profit</th></tr></thead>
+      <tbody>${rows}</tbody></table></div>`;
+
+    const totalPages = Math.ceil(trxList.length / AP_PAGE_SIZE);
+    document.getElementById('ap-pagination').innerHTML = totalPages > 1
+      ? `<button class="btn btn-secondary btn-sm" onclick="changeApPage(-1)" ${_apPage===0?'disabled':''}>‹ Prev</button>
+         <span style="font-size:13px;color:var(--text-muted)">Hal ${_apPage+1} / ${totalPages}</span>
+         <button class="btn btn-secondary btn-sm" onclick="changeApPage(1)" ${_apPage===totalPages-1?'disabled':''}>Next ›</button>`
+      : '';
+    window._apCurrentList = trxList;
+  }
+
+  window.changeApPage = function(delta) {
+    const list = window._apCurrentList || [];
+    const totalPages = Math.ceil(list.length / AP_PAGE_SIZE);
+    _apPage = Math.max(0, Math.min(totalPages - 1, _apPage + delta));
+    renderApDetailData(list);
+  };
+
+  window.showApDetailModal = function(trxId) {
+    const trx = _apAllTrx.find(t => t.id === trxId);
+    if (!trx) return;
+    const items = trx.items || [];
+    const rows = items.map(i => `<tr>
+      <td>${i.produk_nama}</td>
+      <td style="text-align:center">${i.jumlah_pcs} pcs</td>
+      <td>${formatRupiah(i.harga_pcs)}</td>
+      <td>${formatRupiah(i.subtotal)}</td>
+      <td>${formatRupiah(i.modal_pcs_snapshot)}</td>
+      <td style="color:var(--green-text)">${formatRupiah(i.profit_subtotal)}</td>
+    </tr>`).join('');
+    document.getElementById('modal-ap-detail-body').innerHTML = `
+      <div style="font-size:13px;color:var(--text-muted);margin-bottom:16px">
+        ${formatTanggal(trx.tanggal_pasaran)} · ${trx.mitra_nama}<br>
+        Dikonfirmasi oleh: ${trx.dikonfirmasi_oleh_nama || '-'}
+      </div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Produk</th><th>Jml</th><th>Harga</th><th>Subtotal</th><th>Modal</th><th>Profit</th></tr></thead>
+        <tbody>${rows}</tbody>
+        <tfoot><tr style="font-weight:700;background:var(--bg)">
+          <td colspan="3">Total</td>
+          <td>${formatRupiah(trx.total)}</td>
+          <td>${formatRupiah(trx.total_modal)}</td>
+          <td style="color:var(--green-text)">${formatRupiah(trx.total_profit)}</td>
+        </tr></tfoot>
+      </table></div>`;
+    openModal('modal-ap-detail');
+  };
+
+  window.printAnalisis = function() {
+    // Siapkan print header & footer
+    const range = getApDateRange();
+    const periodeLabel = _apPeriode === 'hari' ? 'Hari Ini'
+      : _apPeriode === 'minggu' ? 'Minggu Ini'
+      : _apPeriode === 'bulan' ? 'Bulan Ini'
+      : `${document.getElementById('ap-tgl-mulai')?.value} s/d ${document.getElementById('ap-tgl-selesai')?.value}`;
+    document.getElementById('ap-print-header').style.display = 'block';
+    document.getElementById('ap-print-periode').textContent = `Periode: ${periodeLabel}`;
+    document.getElementById('ap-print-date').textContent = new Date().toLocaleDateString('id-ID');
+    document.getElementById('ap-print-footer').style.display = 'block';
+    // Convert chart ke image untuk print
+    const canvas = document.getElementById('chart-profit-tren');
+    if (canvas) {
+      document.getElementById('ap-print-chart').style.display = 'block';
+      document.getElementById('ap-print-chart-img').src = canvas.toDataURL('image/png');
+    }
+    window.print();
+    setTimeout(() => {
+      document.getElementById('ap-print-header').style.display = 'none';
+      document.getElementById('ap-print-footer').style.display = 'none';
+      document.getElementById('ap-print-chart').style.display = 'none';
+    }, 1000);
+  };
+
+  /* ==========================================================
+     ██████  PENGATURAN
+  ========================================================== */
+  async function loadPengaturan() {
+    // Load info bisnis
+    try {
+      const snap = await window._getDoc(window._doc(window._db, 'settings', 'info'));
+      if (snap.exists()) {
+        const d = snap.data();
+        document.getElementById('setting-nama-toko').value = d.nama_toko || '';
+        document.getElementById('setting-alamat').value = d.alamat || '';
+        document.getElementById('setting-hp').value = d.hp || '';
+        document.getElementById('setting-catatan').value = d.catatan || '';
+        // Cek migration
+        if (d.eceran_initialized_at) {
+          document.getElementById('migration-status').innerHTML =
+            `<div class="info-box info-box-green">✓ Sudah diinisialisasi pada ${formatTanggal(d.eceran_initialized_at)}</div>`;
+          document.getElementById('btn-inisialisasi').disabled = true;
+          document.getElementById('btn-inisialisasi').textContent = '✓ Sudah dijalankan';
+        }
+      }
+    } catch(e) { /* belum ada, tidak masalah */ }
+
+    // Load karyawan
+    try {
+      const snap = await window._getDocs(window._query(
+        window._collection(window._db, 'users'),
+        window._where('role','==','karyawan')
+      ));
+      const list = snap.docs.map(d => d.data());
+      if (list.length) {
+        document.getElementById('setting-karyawan-list').innerHTML = `
+          <div class="table-wrap"><table>
+            <thead><tr><th>Nama</th><th>Status</th></tr></thead>
+            <tbody>${list.map(u => `<tr><td>${u.nama}</td><td><span class="badge ${u.aktif ? 'badge-green':'badge-red'}">${u.aktif?'Aktif':'Nonaktif'}</span></td></tr>`).join('')}</tbody>
+          </table></div>`;
+      } else {
+        document.getElementById('setting-karyawan-list').innerHTML = '<p style="font-size:13px;color:var(--text-muted)">Belum ada karyawan.</p>';
+      }
+    } catch(e) {}
+  }
+
+  window.simpanInfoBisnis = async function() {
+    const data = {
+      nama_toko: document.getElementById('setting-nama-toko').value,
+      alamat: document.getElementById('setting-alamat').value,
+      hp: document.getElementById('setting-hp').value,
+      catatan: document.getElementById('setting-catatan').value,
+      updated_at: _ts()
+    };
+    try {
+      await window._setDoc(window._doc(window._db, 'settings', 'info'), data, { merge: true });
+      showToast('Info bisnis berhasil disimpan');
+    } catch(e) { showToast('Error: '+e.message,'error'); }
+  };
+
+  window.jalankanInisialisasi = async function() {
+    const btn = document.getElementById('btn-inisialisasi');
+    const status = document.getElementById('migration-status');
+    btn.disabled = true; btn.textContent = 'Memproses...';
+    status.innerHTML = '<div class="info-box info-box-blue">🔄 Sedang memindai produk...</div>';
+    try {
+      const snap = await window._getDocs(window._collection(window._db, 'produk'));
+      const produkList = snap.docs.filter(d => !d.data().eceran);
+      const total = produkList.length;
+      let done = 0;
+
+      // writeBatch maks 500
+      const BATCH_SIZE = 400;
+      for (let i = 0; i < produkList.length; i += BATCH_SIZE) {
+        const batch = _wb();
+        const chunk = produkList.slice(i, i + BATCH_SIZE);
+        chunk.forEach(d => {
+          batch.update(window._doc(window._db, 'produk', d.id), {
+            eceran: {
+              aktif: false, harga_pcs: 0, modal_pcs: 0, kategori: 'lain',
+              created_at: _ts(), updated_at: _ts()
+            }
+          });
+        });
+        await batch.commit();
+        done += chunk.length;
+        status.innerHTML = `<div class="info-box info-box-blue">🔄 Diperbarui: ${done} dari ${total} produk</div>`;
+      }
+
+      // Simpan tanggal inisialisasi
+      await window._setDoc(window._doc(window._db, 'settings', 'info'),
+        { eceran_initialized_at: _ts() }, { merge: true });
+
+      status.innerHTML = `<div class="info-box info-box-green">✅ Selesai! ${total} produk berhasil diinisialisasi.</div>`;
+      btn.textContent = '✓ Sudah dijalankan';
+      showToast(`${total} produk berhasil diinisialisasi`);
+    } catch(e) {
+      btn.disabled = false; btn.textContent = '🔄 Scan & Inisialisasi';
+      status.innerHTML = `<div class="info-box info-box-red" style="background:var(--red-bg);color:var(--red-text)">Error: ${e.message}</div>`;
+    }
+  };
 
 </script>
 
