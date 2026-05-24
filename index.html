@@ -3799,7 +3799,9 @@
       } else if (_masterProdukTab === 'khusus') {
         produkList = produkList.filter(p => p.eceran?.aktif === true && p.aktif === false);
       } else {
-        produkList = produkList.filter(p => p.eceran?.aktif === true && p.aktif === true);
+        // Tab "Yang Juga di Grosir": tampilkan SEMUA produk grosir (aktif di grosir)
+        // termasuk yang belum diaktifkan untuk eceran, agar bisa di-Edit & diaktifkan
+        produkList = produkList.filter(p => p.aktif === true && p.eceran !== undefined);
       }
 
       if (!produkList.length) {
@@ -3825,7 +3827,9 @@
           <td>
             <div style="display:flex;gap:6px">
               <button class="btn btn-secondary btn-sm" onclick="openEditProduk('${p.id}')">✏️ Edit</button>
-              ${p.eceran?.aktif ? `<button class="btn btn-danger btn-sm" onclick="konfirmasiNonaktifProduk('${p.id}','${p.nama.replace(/'/g,"\\'")}')">Nonaktifkan</button>` : ''}
+              ${p.eceran?.aktif
+                ? `<button class="btn btn-danger btn-sm" onclick="konfirmasiNonaktifProduk('${p.id}','${p.nama.replace(/'/g,"\\'")}')">Nonaktifkan</button>`
+                : `<button class="btn btn-primary btn-sm" onclick="openEditProduk('${p.id}')">✅ Aktifkan Eceran</button>`}
             </div>
           </td>
         </tr>`;
