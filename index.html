@@ -1194,6 +1194,9 @@
               </div>
             </div>
             <button class="btn btn-primary" onclick="loadRekap()">🔍 Tampilkan</button>
+            <button class="btn btn-secondary no-print" id="btn-kirim-grosir" onclick="kirimRekapKeGrosir()" style="display:none">
+              📤 Kirim ke Rekap Grosir
+            </button>
           </div>
         </div>
 
@@ -2834,6 +2837,10 @@
       </tr>`;
     }).join('');
 
+    // Tampilkan tombol kirim grosir (hanya owner/karyawan, bukan mitra)
+    const btnKirim = document.getElementById('btn-kirim-grosir');
+    if (btnKirim) btnKirim.style.display = canSeeProfit() ? '' : 'none';
+
     container.innerHTML = `
       <div class="table-wrap">
         <table>
@@ -3461,6 +3468,100 @@
       console.error(err);
     }
   }
+
+  window.kirimRekapKeGrosir = async function() {
+    const tglMulaiEl = document.getElementById('rekap-tgl-mulai');
+    const tglSelesaiEl = document.getElementById('rekap-tgl-selesai');
+    if (!tglMulaiEl?.value || !tglSelesaiEl?.value) {
+      showToast('Pilih periode terlebih dahulu', 'error'); return;
+    }
+
+    const startDate = new Date(tglMulaiEl.value + 'T00:00:00');
+    const endDate   = new Date(tglSelesaiEl.value + 'T23:59:59');
+
+    try {
+      // Ambil semua penjualan dikonfirmasi dalam periode
+      const { collection, query, where, orderBy, getDocs, doc, setDoc, serverTimestamp, Timestamp } =
+        await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+
+      const snap = await getDocs(query(
+        collection(db, 'eceran_penjualan'),
+        where('status', '==', 'dikonfirmasi'),
+        where('tanggal_pasaran', '>=', Timestamp.fromDate(startDate)),
+        where('tanggal_pasaran', '<=', Timestamp.fromDate(endDate)),
+        orderBy('tanggal_pasaran', 'asc')
+      ));
+
+      if (snap.empty) {
+        showToast('Tidak ada transaksi dikonfirmasi pada periode ini', 'error'); return;
+      }
+
+      // Kelompokkan per mitra per tanggal
+      const grupMap = {}; // key: "mitraId_YYYY-MM-DD"
+      snap.docs.forEach(d => {
+        const data = d.data();
+        const tgl = data.tanggal_pasaran?.toDate
+          ? data.tanggal_pasaran.toDate().toISOString().split('T')[0]
+          : tglMulaiEl.value;
+        const key = `${data.mitra_id}_${tgl}`;
+        if (!grupMap[key]) {
+          grupMap[key] = {
+            mitra_id:   data.mitra_id,
+            mitra_nama: data.mitra_nama,
+            tanggal_str: tgl,
+            total_nominal: 0,
+            total_pcs: 0,
+            jumlah_transaksi: 0
+          };
+        }
+        grupMap[key].total_nominal  += data.total || 0;
+        grupMap[key].total_pcs      += (data.items||[]).reduce((s,i) => s + (i.jumlah_pcs||0), 0);
+        grupMap[key].jumlah_transaksi++;
+      });
+
+      const entries = Object.values(grupMap);
+
+      // Cek duplikat: apakah sudah ada dokumen untuk tanggal ini?
+      const keysExisting = [];
+      for (const e of entries) {
+        const docId = `${e.mitra_id}_${e.tanggal_str}`;
+        try {
+          const existing = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js')
+            .then(({ getDoc, doc }) => getDoc(doc(db, 'rekap_ecer_harian', docId)));
+          if (existing.exists()) keysExisting.push(`${e.mitra_nama} (${e.tanggal_str})`);
+        } catch(e) {}
+      }
+
+      if (keysExisting.length > 0) {
+        const lanjut = confirm(
+          `Data berikut sudah pernah dikirim:\n• ${keysExisting.join('\n• ')}\n\nTimpa dengan data terbaru?`
+        );
+        if (!lanjut) return;
+      }
+
+      // Tulis ke Firestore collection rekap_ecer_harian
+      const { getDoc: _getDoc } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+      let sukses = 0;
+      for (const e of entries) {
+        const docId = `${e.mitra_id}_${e.tanggal_str}`;
+        await setDoc(doc(db, 'rekap_ecer_harian', docId), {
+          ...e,
+          sumber: 'ecer',
+          dikirim_oleh_uid:  window._getCurrentUser()?.uid || '',
+          dikirim_oleh_nama: window._getCurrentUserData()?.nama || '',
+          dikirim_at: serverTimestamp()
+        });
+        sukses++;
+      }
+
+      showToast(`✅ Berhasil kirim ${sukses} rekap mitra ke grosir!`, 'success');
+      document.getElementById('btn-kirim-grosir').style.display = 'none';
+
+    } catch(err) {
+      console.error('kirimRekapKeGrosir error:', err);
+      showToast('Gagal mengirim: ' + err.message, 'error');
+    }
+  };
 
   function renderRekapTabel(container, docs) {
     let totalOmzet = 0, totalProfit = 0, totalPcs = 0;
