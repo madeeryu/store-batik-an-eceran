@@ -2837,9 +2837,7 @@
       </tr>`;
     }).join('');
 
-    // Tampilkan tombol kirim grosir (hanya owner/karyawan, bukan mitra)
-    const btnKirim = document.getElementById('btn-kirim-grosir');
-    if (btnKirim) btnKirim.style.display = canSeeProfit() ? '' : 'none';
+    
 
     container.innerHTML = `
       <div class="table-wrap">
@@ -3592,6 +3590,10 @@
         <td>${statusBadge}</td>
       </tr>`;
     }).join('');
+
+    // Tampilkan tombol kirim grosir (hanya owner/karyawan, bukan mitra)
+    const btnKirim = document.getElementById('btn-kirim-grosir');
+    if (btnKirim) btnKirim.style.display = canSeeProfit() ? '' : 'none';
 
     container.innerHTML = `
       <div class="table-wrap">
