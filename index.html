@@ -1220,6 +1220,8 @@
               </div>
             </div>
             <button class="btn btn-primary" onclick="loadRekap()">🔍 Tampilkan</button>
+            <button class="btn btn-secondary" id="btn-kirim-ke-grosir" onclick="bukaModalKirimKeGrosir()"
+              style="white-space:nowrap;display:none">📤 Kirim ke Grosir</button>
           </div>
         </div>
 
@@ -1753,6 +1755,27 @@
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-tambah-stok-rumah-eceran')">Batal</button>
       <button class="btn btn-primary" id="btn-simpan-stok-rumah" onclick="simpanTambahStokRumahEceran()">💾 Tambah Stok</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- MODAL: KIRIM REKAP KE GROSIR                                  -->
+<!-- ============================================================ -->
+<div class="modal-overlay" id="modal-kirim-ke-grosir">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-header">
+      <div class="modal-title">📤 Kirim Rekapan ke Grosir</div>
+      <button class="modal-close" onclick="closeModal('modal-kirim-ke-grosir')">✕</button>
+    </div>
+    <div id="modal-kirim-grosir-body" style="padding:4px 0 8px">
+      <div class="loading-state"><div class="loading-spinner"></div></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-kirim-ke-grosir')">Batal</button>
+      <button class="btn btn-primary" id="btn-kirim-grosir-ok" onclick="eksekusiKirimKeGrosir()" disabled>
+        📤 Ya, Kirim ke Grosir
+      </button>
     </div>
   </div>
 </div>
@@ -4274,6 +4297,10 @@
 
     if (!tglMulaiEl) return;
 
+    // Tampilkan tombol Kirim ke Grosir hanya untuk owner
+    const btnKirim = document.getElementById('btn-kirim-ke-grosir');
+    if (btnKirim) btnKirim.style.display = isOwner() ? '' : 'none';
+
     // Set default tanggal jika belum diisi
     if (!tglMulaiEl.value) {
       const d = new Date();
@@ -4390,6 +4417,189 @@
       console.error(err);
     }
   }
+
+  /* ============================================================
+     KIRIM REKAPAN KE GROSIR (tulis ke koleksi rekap_ecer_harian)
+  ============================================================ */
+  let _kirimGrosirData = []; // array grouped data siap kirim
+
+  window.bukaModalKirimKeGrosir = async function() {
+    const body = document.getElementById('modal-kirim-grosir-body');
+    const btnOk = document.getElementById('btn-kirim-grosir-ok');
+    _kirimGrosirData = [];
+    btnOk.disabled = true;
+    body.innerHTML = `<div class="loading-state"><div class="loading-spinner"></div> Mengambil data rekap...</div>`;
+    openModal('modal-kirim-ke-grosir');
+
+    try {
+      const tglMulai = document.getElementById('rekap-tgl-mulai')?.value;
+      const tglSelesai = document.getElementById('rekap-tgl-selesai')?.value;
+      const filterMitraEl = document.getElementById('rekap-filter-mitra');
+      const filterMitraId = filterMitraEl?.value || '';
+      const filterMitraNama = filterMitraEl?.options[filterMitraEl.selectedIndex]?.text || 'Semua Mitra';
+
+      if (!tglMulai || !tglSelesai) {
+        body.innerHTML = `<div class="info-box info-box-amber">⚠️ Pilih periode tanggal terlebih dahulu lalu klik Tampilkan.</div>`;
+        return;
+      }
+
+      const startDate = new Date(tglMulai + 'T00:00:00');
+      const endDate   = new Date(tglSelesai + 'T23:59:59');
+
+      // Query transaksi dikonfirmasi sesuai filter aktif
+      let q = query(
+        collection(db, 'eceran_penjualan'),
+        where('status', '==', 'dikonfirmasi'),
+        where('tanggal_pasaran', '>=', Timestamp.fromDate(startDate)),
+        where('tanggal_pasaran', '<=', Timestamp.fromDate(endDate)),
+        orderBy('tanggal_pasaran', 'asc')
+      );
+      if (filterMitraId) {
+        q = query(
+          collection(db, 'eceran_penjualan'),
+          where('status', '==', 'dikonfirmasi'),
+          where('mitra_id', '==', filterMitraId),
+          where('tanggal_pasaran', '>=', Timestamp.fromDate(startDate)),
+          where('tanggal_pasaran', '<=', Timestamp.fromDate(endDate)),
+          orderBy('tanggal_pasaran', 'asc')
+        );
+      }
+
+      const snap = await getDocs(q);
+      const trxList = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+      if (!trxList.length) {
+        body.innerHTML = `<div class="info-box info-box-amber">⚠️ Tidak ada transaksi dikonfirmasi di periode ini.</div>`;
+        return;
+      }
+
+      // Group by (mitra_id + tanggal_str) → satu record per mitra per hari
+      const grouped = {};
+      trxList.forEach(trx => {
+        const tglStr = trx.tanggal_pasaran?.toDate
+          ? trx.tanggal_pasaran.toDate().toISOString().split('T')[0]
+          : '';
+        if (!tglStr) return;
+        const key = `${trx.mitra_id}_${tglStr}`;
+        if (!grouped[key]) {
+          grouped[key] = {
+            _docId: `eceran_${trx.mitra_id}_${tglStr}`,
+            mitra_id: trx.mitra_id,
+            mitra_nama: trx.mitra_nama,
+            tanggal_str: tglStr,
+            total_pcs: 0,
+            total_nominal: 0,
+            total_profit: 0,
+            items: []
+          };
+        }
+        const g = grouped[key];
+        (trx.items || []).forEach(item => {
+          g.total_pcs    += item.jumlah_pcs || 0;
+          g.total_nominal += item.subtotal  || 0;
+          g.total_profit  += item.profit_subtotal || 0;
+          // Gabung items yang sama
+          const existing = g.items.find(i => i.produk_id === item.produk_id);
+          if (existing) { existing.jumlah_pcs += item.jumlah_pcs; existing.subtotal += item.subtotal || 0; }
+          else g.items.push({ produk_id: item.produk_id, produk_nama: item.produk_nama, jumlah_pcs: item.jumlah_pcs, subtotal: item.subtotal || 0 });
+        });
+      });
+
+      _kirimGrosirData = Object.values(grouped);
+      const totalOmzet  = _kirimGrosirData.reduce((s, g) => s + g.total_nominal, 0);
+      const totalProfit = _kirimGrosirData.reduce((s, g) => s + g.total_profit,  0);
+      const totalPcs    = _kirimGrosirData.reduce((s, g) => s + g.total_pcs,     0);
+
+      // Baris preview per mitra per tanggal
+      const previewRows = _kirimGrosirData.map(g => `
+        <tr>
+          <td style="font-weight:600">${g.mitra_nama}</td>
+          <td style="font-size:12px;color:var(--text-muted)">${g.tanggal_str}</td>
+          <td style="text-align:center">${g.total_pcs} pcs</td>
+          <td style="font-weight:700;color:var(--green)">${formatRupiah(g.total_nominal)}</td>
+          ${canSeeProfit() ? `<td style="color:var(--green-text)">${formatRupiah(g.total_profit)}</td>` : ''}
+        </tr>`).join('');
+
+      body.innerHTML = `
+        <div class="info-box info-box-blue" style="margin-bottom:14px;font-size:13px">
+          📅 Periode: <strong>${tglMulai} s/d ${tglSelesai}</strong>
+          &nbsp;·&nbsp; Mitra: <strong>${filterMitraNama}</strong>
+        </div>
+        <div class="table-wrap" style="max-height:250px;overflow-y:auto;margin-bottom:12px">
+          <table>
+            <thead>
+              <tr>
+                <th>Mitra</th>
+                <th>Tanggal</th>
+                <th style="text-align:center">Pcs</th>
+                <th>Omzet</th>
+                ${canSeeProfit() ? '<th>Profit</th>' : ''}
+              </tr>
+            </thead>
+            <tbody>${previewRows}</tbody>
+          </table>
+        </div>
+        <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px">
+          <div style="font-size:13px"><span style="color:var(--text-muted)">Total Omzet:</span>
+            <strong style="color:var(--green);margin-left:4px">${formatRupiah(totalOmzet)}</strong></div>
+          <div style="font-size:13px"><span style="color:var(--text-muted)">Total Pcs:</span>
+            <strong style="margin-left:4px">${totalPcs} pcs</strong></div>
+          ${canSeeProfit() ? `<div style="font-size:13px"><span style="color:var(--text-muted)">Total Profit:</span>
+            <strong style="color:var(--green-text);margin-left:4px">${formatRupiah(totalProfit)}</strong></div>` : ''}
+        </div>
+        <div class="info-box info-box-amber" style="font-size:12px">
+          ⚠️ Data dikirim sebagai <strong>${_kirimGrosirData.length} record</strong> (per mitra per tanggal).
+          Jika rekap hari yang sama sudah pernah dikirim, data lama akan <strong>ditimpa</strong>.
+        </div>`;
+
+      btnOk.disabled = false;
+    } catch (err) {
+      body.innerHTML = `<div class="info-box info-box-red">⚠️ Gagal memuat: ${err.message}</div>`;
+    }
+  };
+
+  window.eksekusiKirimKeGrosir = async function() {
+    if (!_kirimGrosirData.length) return;
+    const btn = document.getElementById('btn-kirim-grosir-ok');
+    btn.disabled = true;
+    btn.textContent = '⏳ Mengirim...';
+    try {
+      const batch = writeBatch(db);
+      const now = serverTimestamp();
+      const namaKirim = currentUserData?.nama || '-';
+      const uidKirim  = currentUser.uid;
+
+      for (const g of _kirimGrosirData) {
+        // Gunakan ID deterministik: eceran_{mitraId}_{tanggal_str}
+        // → re-send hari yang sama akan timpa, tidak duplikat
+        const docRef = doc(db, 'rekap_ecer_harian', g._docId);
+        batch.set(docRef, {
+          mitra_id     : g.mitra_id,
+          mitra_nama   : g.mitra_nama,
+          tanggal_str  : g.tanggal_str,
+          total_pcs    : g.total_pcs,
+          total_nominal: g.total_nominal,
+          total_profit : g.total_profit,
+          items        : g.items,
+          dikirim_oleh_uid  : uidKirim,
+          dikirim_oleh_nama : namaKirim,
+          dikirim_at        : now
+        });
+      }
+
+      await batch.commit();
+
+      closeModal('modal-kirim-ke-grosir');
+      showToast(`✅ ${_kirimGrosirData.length} record berhasil dikirim ke Grosir!`, 'success');
+      _kirimGrosirData = [];
+    } catch (err) {
+      console.error(err);
+      showToast('Gagal kirim: ' + err.message, 'error');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '📤 Ya, Kirim ke Grosir';
+    }
+  };
 
   function renderRekapTabel(container, docs) {
     let totalOmzet = 0, totalProfit = 0, totalPcs = 0;
@@ -4565,10 +4775,11 @@
     }
 
     const tglArr = [...tglSet].sort();
-    const produkArr = [...produkSet].sort().map(p => {
+    // Map dulu, baru sort by nama A-Z (bukan sort string "id|||nama" yg hasilnya urut by id)
+    const produkArr = [...produkSet].map(p => {
       const [id, nama] = p.split('|||');
       return { id, nama };
-    });
+    }).sort((a, b) => (a.nama || '').localeCompare(b.nama || '', 'id'));
 
     // Header tanggal
     const thDate = tglArr.map(tgl => {
