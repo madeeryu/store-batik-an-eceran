@@ -1682,6 +1682,31 @@
 </div>
 
 <!-- ============================================================ -->
+<!-- MODAL: HAPUS TRANSAKSI DIKONFIRMASI                          -->
+<!-- ============================================================ -->
+<div class="modal-overlay" id="modal-hapus-trx-dikonfirmasi">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">🗑️ Hapus Transaksi</div>
+      <button class="modal-close" onclick="closeModal('modal-hapus-trx-dikonfirmasi')">✕</button>
+    </div>
+    <div style="padding:4px 0 8px">
+      <p style="color:var(--text-secondary);font-size:14px;margin-bottom:12px">
+        Hapus transaksi yang sudah dikonfirmasi ini secara permanen?
+      </p>
+      <div class="info-box info-box-amber" style="font-size:13px">
+        ⚠️ <strong>Stok keranjang mitra akan dikembalikan</strong> ke kondisi sebelum transaksi ini dicatat.<br>
+        <span style="font-size:12px;color:var(--text-muted);margin-top:4px;display:block">Data juga hilang dari rekap & matrix.</span>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-hapus-trx-dikonfirmasi')">Batal</button>
+      <button class="btn btn-danger" id="btn-hapus-trx-ok">🗑️ Ya, Hapus & Kembalikan Stok</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
 <!-- MODAL: EDIT TRANSAKSI DIKONFIRMASI                           -->
 <!-- ============================================================ -->
 <div class="modal-overlay" id="modal-edit-transaksi">
@@ -2821,6 +2846,7 @@
       </div>` : `<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
         <span style="font-size:12px;color:var(--text-muted)">✓ ${data.dikonfirmasi_oleh_nama || '-'}</span>
         ${canSeeProfit() ? `<button class="btn btn-secondary btn-sm" onclick="openEditTransaksi('${id}')">✏️ Edit</button>` : ''}
+        ${isOwner() ? `<button class="btn btn-danger btn-sm" onclick="triggerHapusTrxDikonfirmasi('${id}')">🗑️ Hapus</button>` : ''}
       </div>`;
 
     return `
@@ -3187,6 +3213,64 @@
       await loadDraftList();
     } catch (err) {
       showToast('Gagal hapus: ' + err.message, 'error');
+    }
+  };
+
+  /* ============================================================
+     HAPUS TRANSAKSI DIKONFIRMASI (Owner only) — stok dikembalikan
+  ============================================================ */
+  let _pendingHapusTrxId = null;
+
+  window.triggerHapusTrxDikonfirmasi = function(id) {
+    _pendingHapusTrxId = id;
+    openModal('modal-hapus-trx-dikonfirmasi');
+  };
+
+  document.getElementById('btn-hapus-trx-ok').onclick = async function() {
+    if (!_pendingHapusTrxId) return;
+    const btn = this;
+    btn.disabled = true;
+    btn.textContent = '⏳ Menghapus...';
+    try {
+      // Ambil data transaksi
+      const snap = await getDoc(doc(db, 'eceran_penjualan', _pendingHapusTrxId));
+      if (!snap.exists()) throw new Error('Transaksi tidak ditemukan');
+      const data = snap.data();
+      if (data.status !== 'dikonfirmasi') throw new Error('Hanya transaksi dikonfirmasi yang bisa dihapus lewat fitur ini');
+
+      const batch = writeBatch(db);
+
+      // Kembalikan stok keranjang mitra (balik increment yg terjadi saat konfirmasi)
+      for (const item of (data.items || [])) {
+        batch.set(doc(db, 'stok_eceran', `${data.mitra_id}_${item.produk_id}`), {
+          mitra_id: data.mitra_id,
+          produk_id: item.produk_id,
+          stok_pcs: increment(item.jumlah_pcs),
+          updated_at: serverTimestamp()
+        }, { merge: true });
+      }
+
+      // Hapus dokumen transaksi
+      batch.delete(doc(db, 'eceran_penjualan', _pendingHapusTrxId));
+
+      await batch.commit();
+
+      closeModal('modal-hapus-trx-dikonfirmasi');
+      showToast('Transaksi dihapus & stok keranjang dikembalikan ✓', 'success');
+      _pendingHapusTrxId = null;
+
+      // Refresh halaman yang relevan
+      await loadDraftList();
+      // Jika rekap sedang terbuka, reload juga agar matrix ikut ter-update
+      if (document.getElementById('page-rekap')?.classList.contains('active')) {
+        loadRekap();
+      }
+    } catch (err) {
+      console.error(err);
+      showToast('Gagal hapus: ' + err.message, 'error');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '🗑️ Ya, Hapus & Kembalikan Stok';
     }
   };
 
@@ -4409,12 +4493,15 @@
                Profit: ${formatRupiah(data.total_profit)}</div>`
           : ''}`;
 
-      // Update footer: add edit button for owner/karyawan on confirmed transactions
+      // Update footer: edit & hapus button (owner only) untuk transaksi dikonfirmasi
       // Pakai `id` (parameter fungsi), bukan data.id (snap.data() tidak mengandung ID)
       document.getElementById('modal-rekap-detail-footer').innerHTML = `
         <button class="btn btn-secondary" onclick="closeModal('modal-rekap-detail')">Tutup</button>
         ${canSeeProfit() && data.status === 'dikonfirmasi'
           ? `<button class="btn btn-primary" onclick="closeModal('modal-rekap-detail');openEditTransaksi('${id}')">✏️ Edit</button>`
+          : ''}
+        ${isOwner() && data.status === 'dikonfirmasi'
+          ? `<button class="btn btn-danger" onclick="closeModal('modal-rekap-detail');triggerHapusTrxDikonfirmasi('${id}')">🗑️ Hapus</button>`
           : ''}`;
 
       openModal('modal-rekap-detail');
