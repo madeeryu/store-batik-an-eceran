@@ -4046,10 +4046,11 @@
           : ''}`;
 
       // Update footer: add edit button for owner/karyawan on confirmed transactions
+      // Pakai `id` (parameter fungsi), bukan data.id (snap.data() tidak mengandung ID)
       document.getElementById('modal-rekap-detail-footer').innerHTML = `
         <button class="btn btn-secondary" onclick="closeModal('modal-rekap-detail')">Tutup</button>
         ${canSeeProfit() && data.status === 'dikonfirmasi'
-          ? `<button class="btn btn-primary" onclick="closeModal('modal-rekap-detail');openEditTransaksi('${data.id}')">✏️ Edit</button>`
+          ? `<button class="btn btn-primary" onclick="closeModal('modal-rekap-detail');openEditTransaksi('${id}')">✏️ Edit</button>`
           : ''}`;
 
       openModal('modal-rekap-detail');
@@ -4284,11 +4285,21 @@
       let produkList = snap.docs.map(d => ({ id: d.id, ...d.data() }));
 
       if (_masterProdukTab === 'semua') {
+        // Semua produk yang aktif di eceran (termasuk khusus eceran)
         produkList = produkList.filter(p => p.eceran?.aktif === true);
       } else if (_masterProdukTab === 'khusus') {
+        // Produk khusus eceran saja (aktif=false → bukan grosir)
         produkList = produkList.filter(p => p.eceran?.aktif === true && p.aktif === false);
       } else {
-        produkList = produkList.filter(p => p.eceran?.aktif === true && p.aktif === true);
+        // TAB GROSIR: tampilkan SEMUA produk grosir (aktif=true),
+        // baik yang sudah diaktifkan di eceran maupun belum
+        produkList = produkList.filter(p => p.aktif === true);
+        produkList.sort((a, b) => {
+          // Aktif di eceran dahulu, kemudian belum aktif
+          const aAktif = a.eceran?.aktif === true ? 0 : 1;
+          const bAktif = b.eceran?.aktif === true ? 0 : 1;
+          return aAktif - bAktif || (a.nama || '').localeCompare(b.nama || '');
+        });
       }
 
       if (!produkList.length) {
@@ -4296,7 +4307,10 @@
         return;
       }
 
+      const isGrosirTab = _masterProdukTab === 'grosir';
+
       const rows = produkList.map(p => {
+        const eceranAktif = p.eceran?.aktif === true;
         const harga = p.eceran?.harga_pcs ?? 0;
         const modal = p.eceran?.modal_pcs ?? 0;
         const marginRp = harga - modal;
@@ -4306,33 +4320,66 @@
         const isKhusus = p.is_khusus_eceran === true;
         const stokRumah = p.stok_rumah_eceran ?? 0;
         const namaSafe = p.nama.replace(/'/g,"\\'").replace(/"/g,'&quot;');
-        return `<tr>
+
+        // Kolom harga/modal/margin: tampilkan "-" jika belum diset di eceran
+        const hargaCell = eceranAktif || harga > 0 ? formatRupiah(harga) : '<span style="color:var(--text-muted)">—</span>';
+        const modalCell = eceranAktif || modal > 0 ? formatRupiah(modal) : '<span style="color:var(--text-muted)">—</span>';
+        const marginCell = eceranAktif || harga > 0
+          ? `<td>${formatRupiah(marginRp)}</td><td class="${marginClass}">${marginPct}%</td>`
+          : `<td><span style="color:var(--text-muted)">—</span></td><td><span style="color:var(--text-muted)">—</span></td>`;
+
+        // Badge status
+        let statusBadge;
+        if (eceranAktif) {
+          statusBadge = `<span class="badge badge-green">✓ Aktif di Eceran</span>`;
+        } else if (isGrosirTab) {
+          statusBadge = `<span class="badge badge-gray">Belum Aktif di Eceran</span>`;
+        } else {
+          statusBadge = `<span class="badge badge-red">Nonaktif</span>`;
+        }
+
+        // Tombol aksi
+        let aksiButtons;
+        if (eceranAktif) {
+          aksiButtons = `
+            <button class="btn btn-secondary btn-sm" onclick="openEditProduk('${p.id}')">✏️ Edit</button>
+            <button class="btn btn-danger btn-sm" onclick="konfirmasiNonaktifProduk('${p.id}','${namaSafe}')">Nonaktifkan</button>`;
+        } else if (isGrosirTab) {
+          // Produk grosir yang belum aktif di eceran: tombol Aktifkan
+          aksiButtons = `<button class="btn btn-primary btn-sm" onclick="openEditProduk('${p.id}')">✅ Aktifkan di Eceran</button>`;
+        } else {
+          aksiButtons = `<button class="btn btn-secondary btn-sm" onclick="openEditProduk('${p.id}')">✏️ Edit</button>`;
+        }
+
+        return `<tr style="${!eceranAktif && isGrosirTab ? 'opacity:0.7' : ''}">
           <td>
             <strong>${p.nama}</strong>
             ${isKhusus ? '<br><span class="badge badge-green" style="font-size:10px;margin-top:2px">📦 Khusus Eceran</span>' : ''}
           </td>
           <td><span class="badge badge-gray">${kategori}</span></td>
-          <td>${formatRupiah(modal)}</td>
-          <td>${formatRupiah(harga)}</td>
-          <td>${formatRupiah(marginRp)}</td>
-          <td class="${marginClass}">${marginPct}%</td>
-          <td>
+          <td>${modalCell}</td>
+          <td>${hargaCell}</td>
+          ${marginCell}
+          ${!isGrosirTab ? `<td>
             ${isKhusus
               ? `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
                    <span style="font-weight:700;font-size:13px">${stokRumah} pcs</span>
                    <button class="btn btn-secondary btn-sm" onclick="openTambahStokRumahEceran('${p.id}','${namaSafe}',${stokRumah})">➕ Tambah</button>
                  </div>`
               : '<span style="color:var(--text-muted);font-size:12px">—</span>'}
-          </td>
-          <td><span class="badge ${p.eceran?.aktif ? 'badge-green' : 'badge-red'}">${p.eceran?.aktif ? 'Aktif' : 'Nonaktif'}</span></td>
-          <td>
-            <div style="display:flex;gap:6px;flex-wrap:wrap">
-              <button class="btn btn-secondary btn-sm" onclick="openEditProduk('${p.id}')">✏️ Edit</button>
-              ${p.eceran?.aktif ? `<button class="btn btn-danger btn-sm" onclick="konfirmasiNonaktifProduk('${p.id}','${namaSafe}')">Nonaktifkan</button>` : ''}
-            </div>
-          </td>
+          </td>` : ''}
+          <td>${statusBadge}</td>
+          <td><div style="display:flex;gap:6px;flex-wrap:wrap">${aksiButtons}</div></td>
         </tr>`;
       }).join('');
+
+      const grosirTabNote = isGrosirTab
+        ? `<div class="info-box info-box-blue" style="font-size:12px;margin-top:12px">
+             ℹ️ Menampilkan semua produk grosir. Produk yang belum aktif di eceran bisa diaktifkan dengan klik tombol <strong>✅ Aktifkan di Eceran</strong>.
+           </div>`
+        : `<div style="font-size:12px;color:var(--text-muted);margin-top:12px">
+             💡 Perubahan modal TIDAK mempengaruhi transaksi yang sudah dikonfirmasi (modal di-snapshot saat konfirmasi).
+           </div>`;
 
       cont.innerHTML = `
         <div class="table-wrap">
@@ -4341,15 +4388,13 @@
               <th>Nama Produk</th><th>Kategori</th>
               <th>Modal (Rp/pcs)</th><th>Harga (Rp/pcs)</th>
               <th>Margin (Rp)</th><th>Margin (%)</th>
-              <th>Stok Rumah Eceran</th>
+              ${!isGrosirTab ? '<th>Stok Rumah Eceran</th>' : ''}
               <th>Status</th><th>Aksi</th>
             </tr></thead>
             <tbody>${rows}</tbody>
           </table>
         </div>
-        <div style="font-size:12px;color:var(--text-muted);margin-top:12px">
-          💡 Perubahan modal TIDAK mempengaruhi transaksi yang sudah dikonfirmasi (modal di-snapshot saat konfirmasi).
-        </div>`;
+        ${grosirTabNote}`;
     } catch(e) {
       cont.innerHTML = `<div class="empty-state"><span class="empty-icon">⚠️</span><h3>Error</h3><p>${e.message}</p></div>`;
     }
