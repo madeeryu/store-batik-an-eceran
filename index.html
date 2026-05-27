@@ -539,6 +539,32 @@
       border-color: var(--border);
     }
 
+    /* ── Autocomplete widget ── */
+    .ac-wrapper { position: relative; }
+    .ac-dropdown {
+      position: absolute;
+      top: calc(100% + 3px);
+      left: 0; right: 0;
+      z-index: 1200;
+      background: #fff;
+      border: 1.5px solid var(--primary, #1D9E75);
+      border-radius: 10px;
+      max-height: 210px;
+      overflow-y: auto;
+      box-shadow: 0 6px 24px rgba(0,0,0,0.13);
+    }
+    .ac-item {
+      padding: 9px 14px;
+      cursor: pointer;
+      border-bottom: 1px solid var(--border);
+      transition: background .12s;
+    }
+    .ac-item:last-child { border-bottom: none; }
+    .ac-item:hover, .ac-item.ac-hi { background: var(--bg, #f8fafb); }
+    .ac-item-name { font-weight: 600; font-size: 14px; }
+    .ac-item-meta { font-size: 11.5px; color: var(--text-muted); margin-top: 1px; }
+    .ac-no-result { padding: 10px 14px; font-size: 13px; color: var(--text-muted); }
+
     .form-hint {
       font-size: 12px;
       color: var(--text-muted);
@@ -1822,6 +1848,98 @@
   window.isMitra = function() { return currentUserData?.role === 'mitra'; };
 
   /* ============================================================
+     AUTOCOMPLETE WIDGET (dipakai di Input Laku & Isi Stok)
+  ============================================================ */
+  const _acReg = {}; // registry: inputId → { allItems, filtered, hiIdx, onSelect }
+
+  // items: [{ id, label, meta, ...extraData }] — sudah terurut A-Z sebelum dikirim
+  window.initAcWidget = function(inputId, dropId, items, onSelectFn) {
+    _acReg[inputId] = { allItems: items, filtered: items, hiIdx: -1, onSelect: onSelectFn, selected: null };
+    const inp = document.getElementById(inputId);
+    const drop = document.getElementById(dropId);
+    if (!inp || !drop) return;
+
+    inp.addEventListener('input', () => _acRender(inputId, dropId, inp.value));
+    inp.addEventListener('focus', () => _acRender(inputId, dropId, inp.value));
+    inp.addEventListener('blur',  () => setTimeout(() => { drop.style.display = 'none'; }, 180));
+    inp.addEventListener('keydown', e => _acKey(e, inputId, dropId));
+  };
+
+  function _acRender(inputId, dropId, q) {
+    const reg = _acReg[inputId];
+    const drop = document.getElementById(dropId);
+    if (!reg || !drop) return;
+    const ql = q.trim().toLowerCase();
+    reg.filtered = ql
+      ? reg.allItems.filter(i => i.label.toLowerCase().includes(ql))
+      : reg.allItems;
+    reg.hiIdx = -1;
+    if (!reg.filtered.length) {
+      drop.innerHTML = `<div class="ac-no-result">Tidak ada hasil untuk "<em>${q}</em>"</div>`;
+    } else {
+      drop.innerHTML = reg.filtered.map((item, i) =>
+        `<div class="ac-item" data-id="${item.id}" onmousedown="onAcPick('${inputId}','${dropId}','${item.id}')">
+          <div class="ac-item-name">${_acHighlight(item.label, ql)}</div>
+          ${item.meta ? `<div class="ac-item-meta">${item.meta}</div>` : ''}
+        </div>`
+      ).join('');
+    }
+    drop.style.display = 'block';
+  }
+
+  function _acHighlight(text, q) {
+    if (!q) return text;
+    const re = new RegExp(`(${q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')})`, 'gi');
+    return text.replace(re, '<mark style="background:#d1fae5;border-radius:2px">$1</mark>');
+  }
+
+  function _acKey(e, inputId, dropId) {
+    const reg = _acReg[inputId];
+    const drop = document.getElementById(dropId);
+    if (!reg || !drop || drop.style.display === 'none') return;
+    const items = drop.querySelectorAll('.ac-item');
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      reg.hiIdx = Math.min(reg.hiIdx + 1, items.length - 1);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      reg.hiIdx = Math.max(reg.hiIdx - 1, 0);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (reg.hiIdx >= 0 && items[reg.hiIdx]) items[reg.hiIdx].dispatchEvent(new MouseEvent('mousedown'));
+      return;
+    } else if (e.key === 'Escape') {
+      drop.style.display = 'none'; return;
+    } else return;
+    items.forEach((el, i) => el.classList.toggle('ac-hi', i === reg.hiIdx));
+    if (items[reg.hiIdx]) items[reg.hiIdx].scrollIntoView({ block: 'nearest' });
+  }
+
+  window.onAcPick = function(inputId, dropId, itemId) {
+    const reg = _acReg[inputId];
+    if (!reg) return;
+    const item = reg.filtered.find(i => i.id === itemId) || reg.allItems.find(i => i.id === itemId);
+    if (!item) return;
+    reg.selected = item;
+    const inp = document.getElementById(inputId);
+    if (inp) inp.value = item.label;
+    const drop = document.getElementById(dropId);
+    if (drop) drop.style.display = 'none';
+    if (reg.onSelect) reg.onSelect(item);
+  };
+
+  window.getAcSelected = function(inputId) { return _acReg[inputId]?.selected || null; };
+
+  window.clearAcWidget = function(inputId, dropId) {
+    const reg = _acReg[inputId];
+    if (reg) reg.selected = null;
+    const inp = document.getElementById(inputId);
+    if (inp) inp.value = '';
+    const drop = document.getElementById(dropId);
+    if (drop) drop.style.display = 'none';
+  };
+
+  /* ============================================================
      SIDEBAR & NAVIGATION
   ============================================================ */
 
@@ -2431,30 +2549,33 @@
       } catch (e) {}
     }
 
-    // Render produk dropown di dalam area
-    const tempDiv = document.createElement('div');
-    renderFormHTML(tempDiv, produkOptions);
-    // Ambil hanya bagian produk (skip mitra dropdown)
-    area.innerHTML = tempDiv.innerHTML;
+    // Render langsung ke area (tidak pakai tempDiv agar event listener bisa di-attach)
+    renderFormHTML(area, produkOptions);
   }
 
   function renderFormHTML(container, produkOptions) {
-    const optsHTML = produkOptions.length
-      ? produkOptions.map(p => `<option value="${p.produk_id}" data-harga="${p.harga_pcs}" data-nama="${p.produk_nama}" data-stok="${p.stok_pcs}">${p.produk_nama} (stok: ${p.stok_pcs} pcs)</option>`).join('')
-      : `<option value="">-- Tidak ada produk tersedia --</option>`;
+    // Sort A-Z
+    produkOptions.sort((a, b) => (a.produk_nama || '').localeCompare(b.produk_nama || '', 'id'));
+
+    const emptyMsg = produkOptions.length === 0
+      ? `<div class="info-box info-box-amber" style="font-size:13px">⚠️ Tidak ada produk tersedia di stok keranjang.</div>`
+      : '';
 
     const html = `
+      ${emptyMsg}
       <div class="form-row mt-8" id="produk-input-section">
         <div class="form-group">
           <label>Produk</label>
-          <select class="input" id="select-produk-inputlaku" onchange="onChangeProdukInputLaku(this)">
-            <option value="">-- Pilih Produk --</option>
-            ${optsHTML}
-          </select>
+          <div class="ac-wrapper">
+            <input type="text" class="input" id="ac-inputlaku"
+              placeholder="Ketik nama produk..." autocomplete="off" />
+            <div class="ac-dropdown" id="ac-drop-inputlaku" style="display:none"></div>
+          </div>
         </div>
         <div class="form-group">
           <label>Jumlah (pcs)</label>
-          <input type="number" id="input-jumlah-pcs" class="input" min="1" placeholder="0" />
+          <input type="number" id="input-jumlah-pcs" class="input" min="1" placeholder="0"
+            onkeydown="if(event.key==='Enter'){addToCart()}" />
         </div>
       </div>
       <div class="form-group">
@@ -2492,50 +2613,57 @@
         container.innerHTML = html;
       }
     }
-    renderCartDisplay();
-  }
 
-  window.onChangeProdukInputLaku = function(sel) {
-    const opt = sel.options[sel.selectedIndex];
-    const harga = opt.dataset.harga || 0;
-    document.getElementById('display-harga-pcs').value = formatRupiah(Number(harga));
-  };
-
-  window.addToCart = function() {
-    const selProduk = document.getElementById('select-produk-inputlaku');
-    const inputJumlah = document.getElementById('input-jumlah-pcs');
-
-    if (!selProduk?.value) { showToast('Pilih produk dulu', 'error'); return; }
-    const jumlah = parseInt(inputJumlah?.value) || 0;
-    if (jumlah <= 0) { showToast('Jumlah harus lebih dari 0', 'error'); return; }
-
-    const opt = selProduk.options[selProduk.selectedIndex];
-    const stok = parseInt(opt.dataset.stok) || 0;
-
-    // Cek stok vs cart
-    const existingJumlah = cartItems.filter(c => c.produk_id === selProduk.value)
-      .reduce((sum, c) => sum + c.jumlah_pcs, 0);
-    if (existingJumlah + jumlah > stok) {
-      showToast(`Stok tidak cukup! Tersedia ${stok} pcs`, 'error');
-      return;
-    }
-
-    const harga = Number(opt.dataset.harga) || 0;
-    const existIdx = cartItems.findIndex(c => c.produk_id === selProduk.value);
-    if (existIdx >= 0) {
-      cartItems[existIdx].jumlah_pcs += jumlah;
-      cartItems[existIdx].subtotal = cartItems[existIdx].jumlah_pcs * harga;
-    } else {
-      cartItems.push({
-        produk_id: selProduk.value,
-        produk_nama: opt.dataset.nama,
-        jumlah_pcs: jumlah,
-        harga_pcs: harga,
-        subtotal: jumlah * harga
+    // Init autocomplete widget setelah HTML di-set ke DOM
+    if (produkOptions.length > 0) {
+      const acItems = produkOptions.map(p => ({
+        id: p.produk_id,
+        label: p.produk_nama,
+        meta: `Stok: ${p.stok_pcs} pcs · ${formatRupiah(p.harga_pcs)}`,
+        harga_pcs: p.harga_pcs,
+        stok_pcs: p.stok_pcs,
+        produk_nama: p.produk_nama
+      }));
+      initAcWidget('ac-inputlaku', 'ac-drop-inputlaku', acItems, (item) => {
+        const hargaEl = document.getElementById('display-harga-pcs');
+        if (hargaEl) hargaEl.value = formatRupiah(item.harga_pcs);
       });
     }
 
-    selProduk.value = '';
+    renderCartDisplay();
+  }
+
+  window.addToCart = function() {
+    const item = getAcSelected('ac-inputlaku');
+    const inputJumlah = document.getElementById('input-jumlah-pcs');
+
+    if (!item) { showToast('Pilih produk dulu', 'error'); return; }
+    const jumlah = parseInt(inputJumlah?.value) || 0;
+    if (jumlah <= 0) { showToast('Jumlah harus lebih dari 0', 'error'); return; }
+
+    // Cek stok vs cart
+    const existingJumlah = cartItems.filter(c => c.produk_id === item.id)
+      .reduce((sum, c) => sum + c.jumlah_pcs, 0);
+    if (existingJumlah + jumlah > item.stok_pcs) {
+      showToast(`Stok tidak cukup! Tersedia ${item.stok_pcs} pcs`, 'error');
+      return;
+    }
+
+    const existIdx = cartItems.findIndex(c => c.produk_id === item.id);
+    if (existIdx >= 0) {
+      cartItems[existIdx].jumlah_pcs += jumlah;
+      cartItems[existIdx].subtotal = cartItems[existIdx].jumlah_pcs * item.harga_pcs;
+    } else {
+      cartItems.push({
+        produk_id: item.id,
+        produk_nama: item.produk_nama,
+        jumlah_pcs: jumlah,
+        harga_pcs: item.harga_pcs,
+        subtotal: jumlah * item.harga_pcs
+      });
+    }
+
+    clearAcWidget('ac-inputlaku', 'ac-drop-inputlaku');
     if (inputJumlah) inputJumlah.value = '';
     document.getElementById('display-harga-pcs').value = '-';
     renderCartDisplay();
@@ -3425,7 +3553,7 @@
         isiStokMitraNama = mitraList[0].nama;
       }
 
-      // Load produk eceran aktif
+      // Load produk eceran aktif, sort A-Z
       const prodSnap = await getDocs(collection(db, 'produk'));
       const produkEceran = [];
       prodSnap.forEach(d => {
@@ -3434,14 +3562,11 @@
           produkEceran.push({ id: d.id, ...data });
         }
       });
+      produkEceran.sort((a, b) => (a.nama || '').localeCompare(b.nama || '', 'id'));
 
       // Render form
       const mitraOptsHTML = mitraList.map(m =>
         `<option value="${m.id}" data-nama="${m.nama}" ${m.id === isiStokMitraId ? 'selected' : ''}>${m.nama}</option>`
-      ).join('');
-
-      const produkOptsHTML = produkEceran.map(p =>
-        `<option value="${p.id}" data-nama="${p.nama}" data-pcs="${p.pcs_per_kodi || 20}">${p.nama}</option>`
       ).join('');
 
       formContent.innerHTML = `
@@ -3453,10 +3578,11 @@
         </div>
         <div class="form-group">
           <label>Produk</label>
-          <select class="input" id="isi-stok-produk" onchange="onChangeIsiStokProduk(this)">
-            <option value="">-- Pilih Produk --</option>
-            ${produkOptsHTML}
-          </select>
+          <div class="ac-wrapper">
+            <input type="text" class="input" id="ac-isistok"
+              placeholder="Ketik nama produk..." autocomplete="off" />
+            <div class="ac-dropdown" id="ac-drop-isistok" style="display:none"></div>
+          </div>
         </div>
         <div id="isi-stok-produk-info" style="margin-bottom:14px"></div>
         <div class="form-row">
@@ -3479,6 +3605,17 @@
           📦 Simpan Pengisian
         </button>`;
 
+      // Init autocomplete widget untuk isi stok
+      const acIsiStokItems = produkEceran.map(p => ({
+        id: p.id,
+        label: p.nama,
+        meta: `${p.pcs_per_kodi || 20} pcs/kodi`,
+        pcs_per_kodi: p.pcs_per_kodi || 20
+      }));
+      initAcWidget('ac-isistok', 'ac-drop-isistok', acIsiStokItems, async (item) => {
+        await onSelectIsiStokProduk(item.id, item.label);
+      });
+
       await loadIsiStokRiwayat();
     } catch (err) {
       formContent.innerHTML = `<div class="info-box info-box-red">⚠️ ${err.message}</div>`;
@@ -3488,35 +3625,41 @@
   window.onChangeIsiStokMitra = function(sel) {
     isiStokMitraId = sel.value;
     isiStokMitraNama = sel.options[sel.selectedIndex].dataset.nama;
+    // Reset pilihan produk saat ganti mitra
+    isiStokProdukData = null;
+    isiStokProdukEceranData = null;
+    clearAcWidget('ac-isistok', 'ac-drop-isistok');
+    const infoEl = document.getElementById('isi-stok-produk-info');
+    if (infoEl) infoEl.innerHTML = '';
     updateIsiStokPreview();
     loadIsiStokRiwayat();
   };
 
-  window.onChangeIsiStokProduk = async function(sel) {
+  // Dipanggil oleh AC widget saat produk dipilih (id = produk_id, nama = produk.nama)
+  window.onSelectIsiStokProduk = async function(produkId, produkNama) {
     isiStokProdukData = null;
     isiStokProdukEceranData = null;
     const infoEl = document.getElementById('isi-stok-produk-info');
 
-    if (!sel.value) { infoEl.innerHTML = ''; updateIsiStokPreview(); return; }
-    const opt = sel.options[sel.selectedIndex];
+    if (!produkId) { infoEl.innerHTML = ''; updateIsiStokPreview(); return; }
 
     try {
       // Stok grosir
-      const stokSnap = await getDoc(doc(db, 'stok', sel.value));
+      const stokSnap = await getDoc(doc(db, 'stok', produkId));
       isiStokProdukData = stokSnap.exists() ? stokSnap.data() : null;
 
       // Data produk (untuk stok_rumah_eceran)
-      const prodSnap = await getDoc(doc(db, 'produk', sel.value));
+      const prodSnap = await getDoc(doc(db, 'produk', produkId));
       isiStokProdukEceranData = prodSnap.exists() ? prodSnap.data() : null;
 
       // Stok eceran mitra saat ini
-      const seSnap = await getDoc(doc(db, 'stok_eceran', `${isiStokMitraId}_${sel.value}`));
+      const seSnap = await getDoc(doc(db, 'stok_eceran', `${isiStokMitraId}_${produkId}`));
       const stokKeranjang = seSnap.exists() ? (seSnap.data().stok_pcs || 0) : 0;
 
       const stokRumahEceran = isiStokProdukEceranData?.stok_rumah_eceran;
 
       infoEl.innerHTML = `<div class="info-box info-box-blue">
-        <div style="font-weight:700;margin-bottom:4px">📦 ${opt.dataset.nama}</div>
+        <div style="font-weight:700;margin-bottom:4px">📦 ${produkNama}</div>
         ${isiStokProdukData ? `
           <div style="font-size:12.5px">Stok Mobil Grosir: <strong>${isiStokProdukData.stok_mobil ?? 0} kodi</strong></div>
           <div style="font-size:12.5px">Stok Rumah Grosir: <strong>${isiStokProdukData.stok_rumah ?? 0} kodi</strong></div>
@@ -3537,7 +3680,7 @@
     const btnSimpan = document.getElementById('btn-isi-stok-simpan');
     const jumlah = parseInt(document.getElementById('isi-stok-jumlah')?.value) || 0;
     const sumber = document.getElementById('isi-stok-sumber')?.value;
-    const produkId = document.getElementById('isi-stok-produk')?.value;
+    const produkId = getAcSelected('ac-isistok')?.id || null;
 
     if (!previewEl) return;
 
@@ -3597,13 +3740,13 @@
   };
 
   window.simpanIsiStok = async function() {
-    const produkEl = document.getElementById('isi-stok-produk');
     const jumlahEl = document.getElementById('isi-stok-jumlah');
     const sumberEl = document.getElementById('isi-stok-sumber');
     const btnSimpan = document.getElementById('btn-isi-stok-simpan');
 
-    const produkId = produkEl?.value;
-    const produkNama = produkEl?.options[produkEl.selectedIndex]?.dataset.nama;
+    const selectedProduk = getAcSelected('ac-isistok');
+    const produkId = selectedProduk?.id || null;
+    const produkNama = selectedProduk?.label || null;
     const jumlahPcs = parseInt(jumlahEl?.value) || 0;
     const sumber = sumberEl?.value;
 
@@ -3703,11 +3846,12 @@
       showToast(`Berhasil isi ${jumlahPcs} pcs ke keranjang ${isiStokMitraNama}!`, 'success');
 
       // Reset form
-      produkEl.value = '';
+      clearAcWidget('ac-isistok', 'ac-drop-isistok');
       jumlahEl.value = '';
       document.getElementById('isi-stok-produk-info').innerHTML = '';
       document.getElementById('isi-stok-preview').innerHTML = '';
       isiStokProdukData = null;
+      isiStokProdukEceranData = null;
       btnSimpan.disabled = true;
 
       await loadIsiStokRiwayat();
@@ -4593,9 +4737,12 @@
     const stokRumah = p.stok_rumah_eceran ?? 0;
     document.getElementById('modal-produk-title').textContent = 'Edit Produk Eceran';
     document.getElementById('modal-produk-body').innerHTML = `
-      <div class="form-group"><label>Nama Produk</label>
-        <input type="text" class="input" value="${p.nama}" ${isGrosir ? 'readonly style="background:var(--bg);color:var(--text-muted)"' : 'id="p-nama"'} /></div>
-      ${isGrosir ? `<div class="info-box info-box-blue mb-16" style="font-size:12px">ℹ️ Produk ini juga dijual di grosir. Harga & modal grosir hanya bisa diubah dari aplikasi grosir.</div>` : '<input type="hidden" id="p-nama" value="'+p.nama+'" />'}
+      <div class="form-group"><label>Nama Produk${isGrosir ? '' : ' <span style="color:var(--red-text)">*</span>'}</label>
+        ${isGrosir
+          ? `<input type="text" class="input" value="${(p.nama||'').replace(/"/g,'&quot;')}" readonly style="background:var(--bg);color:var(--text-muted)" />`
+          : `<input type="text" class="input" id="p-nama" value="${(p.nama||'').replace(/"/g,'&quot;')}" />`}
+      </div>
+      ${isGrosir ? `<div class="info-box info-box-blue mb-16" style="font-size:12px">ℹ️ Produk ini juga dijual di grosir. Nama hanya bisa diubah dari aplikasi grosir.</div>` : ''}
       <div class="form-group"><label>Kategori Eceran</label>
         <select class="input" id="p-kategori">
           ${KATEGORI_OPTIONS.map(k => `<option value="${k}" ${(p.eceran?.kategori||'lain')===k?'selected':''}>${k.charAt(0).toUpperCase()+k.slice(1)}</option>`).join('')}
@@ -4655,6 +4802,12 @@
           'eceran.kategori': kategori,
           'eceran.updated_at': _ts()
         };
+        // Simpan perubahan nama (hanya untuk produk non-grosir)
+        if (!isGrosirProduk) {
+          const namaBaru = document.getElementById('p-nama')?.value?.trim();
+          if (!namaBaru) { showToast('Nama produk tidak boleh kosong', 'error'); btn.disabled=false; btn.textContent='💾 Simpan'; return; }
+          updatePayload.nama = namaBaru;
+        }
         // Aktifkan is_khusus_eceran jika user mencentang (hanya untuk non-grosir)
         if (!isGrosirProduk) {
           const isKhususChecked = document.getElementById('p-khusus-eceran')?.checked || false;
