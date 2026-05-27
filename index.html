@@ -3067,6 +3067,28 @@
   // ============================================================
 
   /* ----------------------------------------------------------
+     HELPER: Render filter chips kategori (dipakai di Master Produk & Stok Keranjang)
+  ---------------------------------------------------------- */
+  function _renderKategoriChips(kategoriList, callbackFnName) {
+    if (!kategoriList || !kategoriList.length) return '';
+    // Tentukan mana yang aktif berdasarkan state saat ini
+    const aktif = callbackFnName === 'setMasterProdukKategori' ? _masterProdukKategori : _stokKeranjangKategori;
+    const chips = [
+      `<button class="btn btn-sm ${aktif === '' ? 'btn-primary' : 'btn-secondary'}"
+        onclick="${callbackFnName}('')" style="border-radius:20px">Semua</button>`,
+      ...kategoriList.map(k =>
+        `<button class="btn btn-sm ${aktif === k ? 'btn-primary' : 'btn-secondary'}"
+          onclick="${callbackFnName}('${k}')"
+          style="border-radius:20px;text-transform:capitalize">${k}</button>`
+      )
+    ].join('');
+    return `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;align-items:center">
+      <span style="font-size:12px;color:var(--text-muted);font-weight:600;margin-right:2px">Jenis:</span>
+      ${chips}
+    </div>`;
+  }
+
+  /* ----------------------------------------------------------
      EKSTENSI NAVIGASI (disambung ke navigateTo Bagian 1)
   ---------------------------------------------------------- */
 
@@ -3112,8 +3134,47 @@
       return;
     }
 
-    const rows = snap.docs.map(d => {
+    // Load produk kategori map
+    const produkSnap = await getDocs(collection(db, 'produk'));
+    const produkKatMap = {};
+    const kategoriSet = new Set();
+    produkSnap.forEach(d => {
+      const kat = d.data().eceran?.kategori || 'lain';
+      produkKatMap[d.id] = kat;
+    });
+
+    let allItems = snap.docs.map(d => {
       const data = d.data();
+      const kat = produkKatMap[data.produk_id] || 'lain';
+      kategoriSet.add(kat);
+      return { ...data, _kategori: kat };
+    });
+
+    window._mitraStokItems = allItems;
+    window._mitraStokContainer = container;
+    window._stokKategoriList = [...kategoriSet].sort();
+    _stokKeranjangKategori = '';
+
+    const filterEl = document.getElementById('stok-keranjang-filter');
+    if (filterEl) {
+      filterEl.innerHTML = _renderKategoriChips(window._stokKategoriList, 'onFilterKategoriStok');
+    }
+
+    _renderMitraStokTable(container, allItems, '');
+  }
+
+  function _renderMitraStokTable(container, allItems, filterKat) {
+    let items = filterKat ? allItems.filter(i => i._kategori === filterKat) : allItems;
+    // Sort A-Z
+    items = [...items].sort((a, b) => (a.produk_nama || '').localeCompare(b.produk_nama || '', 'id'));
+
+    if (!items.length) {
+      container.innerHTML = `<div class="empty-state"><span class="empty-icon">🔍</span>
+        <h3>Tidak ada produk</h3><p>Tidak ada produk dalam kategori ini.</p></div>`;
+      return;
+    }
+
+    const rows = items.map(data => {
       const stok = data.stok_pcs || 0;
       const target = data.stok_target_pcs || 0;
       let statusBadge, rowBg;
@@ -3139,16 +3200,18 @@
       <div class="table-wrap">
         <table>
           <thead>
-            <tr>
-              <th>Nama Produk</th>
-              <th>Stok (pcs)</th>
-              <th>Target (pcs)</th>
-              <th>Status</th>
-            </tr>
+            <tr><th>Nama Produk</th><th>Stok (pcs)</th><th>Target (pcs)</th><th>Status</th></tr>
           </thead>
           <tbody>${rows}</tbody>
         </table>
       </div>`;
+  }
+
+  // Untuk onFilterKategoriStok pada mitra view
+  function renderStokKeranjangMitraFiltered(container) {
+    if (window._mitraStokItems) {
+      _renderMitraStokTable(container, window._mitraStokItems, _stokKeranjangKategori);
+    }
   }
 
   async function renderStokKeranjangStaff(container, filterEl) {
@@ -3165,31 +3228,50 @@
       return;
     }
 
-    // Filter dropdown
-    filterEl.innerHTML = `
-      <div class="form-group" style="max-width:240px;margin-bottom:16px">
-        <label>Filter Mitra</label>
-        <select class="input" id="filter-mitra-stok" onchange="onFilterMitraStok(this)">
-          <option value="">Semua Mitra</option>
-          ${mitraList.map(m => `<option value="${m.id}">${m.nama}</option>`).join('')}
-        </select>
-      </div>`;
+    // Load produk kategori map
+    const produkSnap = await getDocs(collection(db, 'produk'));
+    const produkKatMap = {};
+    produkSnap.forEach(d => {
+      produkKatMap[d.id] = d.data().eceran?.kategori || 'lain';
+    });
+    window._produkKatMap = produkKatMap;
 
-    // Load stok semua mitra
+    // Load stok semua mitra + enrich dengan kategori
     const seSnap = await getDocs(collection(db, 'stok_eceran'));
     const stokByMitra = {};
+    const kategoriSet = new Set();
     seSnap.forEach(d => {
       const data = d.data();
+      const kat = produkKatMap[data.produk_id] || 'lain';
+      kategoriSet.add(kat);
       if (!stokByMitra[data.mitra_id]) stokByMitra[data.mitra_id] = [];
-      stokByMitra[data.mitra_id].push(data);
+      stokByMitra[data.mitra_id].push({ ...data, _kategori: kat });
     });
 
     window._stokByMitra = stokByMitra;
     window._mitraListStok = mitraList;
-    renderStokKeranjangCards(container, mitraList, stokByMitra, '');
+    window._stokKategoriList = [...kategoriSet].sort();
+    _stokKeranjangKategori = '';
+
+    const kategoriChips = _renderKategoriChips(window._stokKategoriList, 'onFilterKategoriStok');
+
+    // Filter UI: mitra + kategori
+    filterEl.innerHTML = `
+      <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end;margin-bottom:8px">
+        <div class="form-group" style="max-width:220px;margin:0">
+          <label>Filter Mitra</label>
+          <select class="input" id="filter-mitra-stok" onchange="onFilterMitraStok(this)">
+            <option value="">Semua Mitra</option>
+            ${mitraList.map(m => `<option value="${m.id}">${m.nama}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      ${kategoriChips}`;
+
+    renderStokKeranjangCards(container, mitraList, stokByMitra, '', '');
   }
 
-  function renderStokKeranjangCards(container, mitraList, stokByMitra, filterMitraId) {
+  function renderStokKeranjangCards(container, mitraList, stokByMitra, filterMitraId, filterKat) {
     const filteredMitra = filterMitraId
       ? mitraList.filter(m => m.id === filterMitraId)
       : mitraList;
@@ -3200,7 +3282,14 @@
     }
 
     container.innerHTML = filteredMitra.map(mitra => {
-      const items = stokByMitra[mitra.id] || [];
+      let items = stokByMitra[mitra.id] || [];
+
+      // Filter by kategori
+      if (filterKat) items = items.filter(i => i._kategori === filterKat);
+
+      // Sort A-Z
+      items = [...items].sort((a, b) => (a.produk_nama || '').localeCompare(b.produk_nama || '', 'id'));
+
       const kritis = items.filter(i => (i.stok_pcs || 0) === 0).length;
       const kritisWarning = kritis > 0 ? `<span class="badge badge-red">⚠️ ${kritis} item habis</span>` : '';
 
@@ -3210,7 +3299,8 @@
             <div style="font-weight:800;font-size:16px">${mitra.nama}</div>
           </div>
           <div class="empty-state" style="padding:20px">
-            <p style="font-size:13px">Keranjang kosong. Belum ada produk diisi.</p></div>
+            <p style="font-size:13px">${filterKat ? `Tidak ada produk kategori "<strong>${filterKat}</strong>" di keranjang ini.` : 'Keranjang kosong. Belum ada produk diisi.'}</p>
+          </div>
         </div>`;
       }
 
@@ -3229,7 +3319,9 @@
           rowBg = '';
         }
         return `<tr style="${rowBg}">
-          <td style="font-weight:600">${data.produk_nama}</td>
+          <td style="font-weight:600">${data.produk_nama}
+            ${data._kategori ? `<br><span style="font-size:11px;color:var(--text-muted)">${data._kategori}</span>` : ''}
+          </td>
           <td style="font-weight:700;font-size:15px">${stok}</td>
           <td style="color:var(--text-secondary)">${target || '-'}</td>
           <td>${statusBadge}</td>
@@ -3248,12 +3340,7 @@
           <div class="table-wrap">
             <table>
               <thead>
-                <tr>
-                  <th>Nama Produk</th>
-                  <th>Stok (pcs)</th>
-                  <th>Target (pcs)</th>
-                  <th>Status</th>
-                </tr>
+                <tr><th>Nama Produk</th><th>Stok (pcs)</th><th>Target (pcs)</th><th>Status</th></tr>
               </thead>
               <tbody>${rows}</tbody>
             </table>
@@ -3262,9 +3349,42 @@
     }).join('');
   }
 
+  let _stokKeranjangKategori = '';
+
   window.onFilterMitraStok = function(sel) {
     const container = document.getElementById('stok-keranjang-content');
-    renderStokKeranjangCards(container, window._mitraListStok, window._stokByMitra, sel.value);
+    renderStokKeranjangCards(container, window._mitraListStok, window._stokByMitra, sel.value, _stokKeranjangKategori);
+  };
+
+  window.onFilterKategoriStok = function(kat) {
+    _stokKeranjangKategori = kat;
+    const container = document.getElementById('stok-keranjang-content');
+
+    // Re-render chips agar tombol aktif ter-update
+    const filterEl = document.getElementById('stok-keranjang-filter');
+    if (filterEl && window._stokKategoriList) {
+      if (window._mitraListStok) {
+        // Staff view: chips + mitra dropdown
+        const mitraList = window._mitraListStok;
+        const mitraVal = document.getElementById('filter-mitra-stok')?.value || '';
+        filterEl.innerHTML = `
+          <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end;margin-bottom:8px">
+            <div class="form-group" style="max-width:220px;margin:0">
+              <label>Filter Mitra</label>
+              <select class="input" id="filter-mitra-stok" onchange="onFilterMitraStok(this)">
+                <option value="">Semua Mitra</option>
+                ${mitraList.map(m => `<option value="${m.id}" ${m.id === mitraVal ? 'selected' : ''}>${m.nama}</option>`).join('')}
+              </select>
+            </div>
+          </div>
+          ${_renderKategoriChips(window._stokKategoriList, 'onFilterKategoriStok')}`;
+        renderStokKeranjangCards(container, mitraList, window._stokByMitra, mitraVal, _stokKeranjangKategori);
+      } else {
+        // Mitra view: chips saja
+        filterEl.innerHTML = _renderKategoriChips(window._stokKategoriList, 'onFilterKategoriStok');
+        renderStokKeranjangMitraFiltered(container);
+      }
+    }
   };
 
   /* ==========================================================
@@ -4265,17 +4385,24 @@
      ██████  MASTER PRODUK
   ========================================================== */
   let _masterProdukTab = 'semua';
+  let _masterProdukKategori = ''; // '' = semua kategori
   let _editProdukId = null;
   let _editProdukData = null;
 
   window.setMasterProdukTab = function(tab) {
     _masterProdukTab = tab;
+    _masterProdukKategori = ''; // reset filter kategori saat ganti tab
     ['semua','khusus','grosir'].forEach(t => {
       const el = document.getElementById(`tab-${t === 'semua' ? 'semua-eceran' : t === 'khusus' ? 'khusus-eceran' : 'juga-grosir'}`);
       if (el) { el.className = tab === t ? 'btn btn-primary btn-sm' : 'btn btn-secondary btn-sm'; }
     });
     loadMasterProduk();
   }
+
+  window.setMasterProdukKategori = function(kat) {
+    _masterProdukKategori = kat;
+    loadMasterProduk(); // loadMasterProduk akan re-render chips dengan state terbaru
+  };
 
   async function loadMasterProduk() {
     const cont = document.getElementById('master-produk-content');
@@ -4285,25 +4412,38 @@
       let produkList = snap.docs.map(d => ({ id: d.id, ...d.data() }));
 
       if (_masterProdukTab === 'semua') {
-        // Semua produk yang aktif di eceran (termasuk khusus eceran)
         produkList = produkList.filter(p => p.eceran?.aktif === true);
+        produkList.sort((a, b) => (a.nama || '').localeCompare(b.nama || '', 'id'));
       } else if (_masterProdukTab === 'khusus') {
-        // Produk khusus eceran saja (aktif=false → bukan grosir)
         produkList = produkList.filter(p => p.eceran?.aktif === true && p.aktif === false);
+        produkList.sort((a, b) => (a.nama || '').localeCompare(b.nama || '', 'id'));
       } else {
-        // TAB GROSIR: tampilkan SEMUA produk grosir (aktif=true),
-        // baik yang sudah diaktifkan di eceran maupun belum
+        // TAB GROSIR: tampilkan SEMUA produk grosir (aktif=true)
         produkList = produkList.filter(p => p.aktif === true);
         produkList.sort((a, b) => {
-          // Aktif di eceran dahulu, kemudian belum aktif
           const aAktif = a.eceran?.aktif === true ? 0 : 1;
           const bAktif = b.eceran?.aktif === true ? 0 : 1;
-          return aAktif - bAktif || (a.nama || '').localeCompare(b.nama || '');
+          return aAktif - bAktif || (a.nama || '').localeCompare(b.nama || '', 'id');
         });
       }
 
+      // Kumpulkan semua kategori unik untuk filter chips
+      const kategoriSet = new Set(produkList.map(p => p.eceran?.kategori || 'lain').filter(Boolean));
+      const kategoriList = [...kategoriSet].sort();
+
+      // Terapkan filter kategori
+      if (_masterProdukKategori) {
+        produkList = produkList.filter(p => (p.eceran?.kategori || 'lain') === _masterProdukKategori);
+      }
+
       if (!produkList.length) {
-        cont.innerHTML = `<div class="empty-state"><span class="empty-icon">🏷️</span><h3>Tidak ada produk</h3><p>Tambahkan produk eceran menggunakan tombol di atas.</p></div>`;
+        // Jika ada filter tapi tidak ada hasil, tampilkan pesan
+        const emptyMsg = _masterProdukKategori
+          ? `Tidak ada produk dalam kategori "<strong>${_masterProdukKategori}</strong>".`
+          : 'Tambahkan produk eceran menggunakan tombol di atas.';
+        const filterChips = _renderKategoriChips(kategoriList, 'setMasterProdukKategori');
+        cont.innerHTML = `${filterChips}<div class="empty-state"><span class="empty-icon">🏷️</span>
+          <h3>Tidak ada produk</h3><p>${emptyMsg}</p></div>`;
         return;
       }
 
@@ -4381,7 +4521,10 @@
              💡 Perubahan modal TIDAK mempengaruhi transaksi yang sudah dikonfirmasi (modal di-snapshot saat konfirmasi).
            </div>`;
 
+      const filterChipsMaster = _renderKategoriChips(kategoriList, 'setMasterProdukKategori');
+
       cont.innerHTML = `
+        ${filterChipsMaster}
         <div class="table-wrap">
           <table>
             <thead><tr>
