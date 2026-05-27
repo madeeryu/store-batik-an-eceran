@@ -1123,7 +1123,7 @@
         </div>
 
         <!-- Daftar Draft Hari Ini -->
-        <div class="section-title">📋 Draft Hari Ini</div>
+        <div class="section-title" id="draft-list-title">📋 Draft Hari Ini</div>
         <div id="draft-list-container">
           <div class="loading-state"><div class="loading-spinner"></div> Memuat draft...</div>
         </div>
@@ -2565,6 +2565,7 @@
     cartItems = [];
     renderCartDisplay();
     await loadProdukForStaff(selectedMitraId);
+    await loadDraftList();
   };
 
   async function loadProdukForStaff(mitraId) {
@@ -2826,18 +2827,36 @@
           orderBy('tanggal_pasaran', 'desc')
         );
       } else {
-        q = query(
-          collection(db, 'eceran_penjualan'),
-          where('tanggal_pasaran', '>=', Timestamp.fromDate(today)),
-          where('tanggal_pasaran', '<', Timestamp.fromDate(tomorrow)),
-          orderBy('tanggal_pasaran', 'desc')
-        );
+        if (selectedMitraId) {
+          q = query(
+            collection(db, 'eceran_penjualan'),
+            where('mitra_id', '==', selectedMitraId),
+            where('tanggal_pasaran', '>=', Timestamp.fromDate(today)),
+            where('tanggal_pasaran', '<', Timestamp.fromDate(tomorrow)),
+            orderBy('tanggal_pasaran', 'desc')
+          );
+        } else {
+          q = query(
+            collection(db, 'eceran_penjualan'),
+            where('tanggal_pasaran', '>=', Timestamp.fromDate(today)),
+            where('tanggal_pasaran', '<', Timestamp.fromDate(tomorrow)),
+            orderBy('tanggal_pasaran', 'desc')
+          );
+        }
+      }
+
+      // Update judul draft sesuai mitra yang dipilih
+      const titleEl = document.getElementById('draft-list-title');
+      if (titleEl) {
+        titleEl.textContent = (selectedMitraId && selectedMitraNama && currentUserData?.role !== 'mitra')
+          ? `📋 Draft Hari Ini — ${selectedMitraNama}`
+          : '📋 Draft Hari Ini';
       }
 
       const snap = await getDocs(q);
       if (snap.empty) {
         container.innerHTML = `<div class="empty-state"><span class="empty-icon">📋</span>
-          <h3>Belum ada transaksi hari ini</h3>
+          <h3>Belum ada transaksi hari ini${selectedMitraId && selectedMitraNama && currentUserData?.role !== 'mitra' ? ` untuk ${selectedMitraNama}` : ''}</h3>
           <p>Tambahkan item dan simpan sebagai draft.</p></div>`;
         return;
       }
