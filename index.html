@@ -3524,6 +3524,12 @@
   let isiStokProdukData = null; // data stok grosir produk terpilih
   let isiStokProdukEceranData = null; // data eceran produk terpilih
 
+  // State filter riwayat pengisian
+  let _riwayatTglDari = '';
+  let _riwayatTglSampai = '';
+  let _riwayatShowAll = false;
+  const _RIWAYAT_LIMIT = 15;
+
   async function loadIsiStok() {
     const formContent = document.getElementById('isi-stok-form-content');
     formContent.innerHTML = `<div class="loading-state"><div class="loading-spinner"></div></div>`;
@@ -3632,6 +3638,10 @@
     const infoEl = document.getElementById('isi-stok-produk-info');
     if (infoEl) infoEl.innerHTML = '';
     updateIsiStokPreview();
+    // Reset filter riwayat saat ganti mitra
+    _riwayatTglDari = '';
+    _riwayatTglSampai = '';
+    _riwayatShowAll = false;
     loadIsiStokRiwayat();
   };
 
@@ -3874,39 +3884,102 @@
   async function loadIsiStokRiwayat() {
     const container = document.getElementById('isi-stok-riwayat');
     if (!container) return;
-    container.innerHTML = `<div class="loading-state"><div class="loading-spinner"></div></div>`;
+
+    // Render filter UI dulu (persisten, tidak ikut loading spinner)
+    const filterHTML = `
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:10px">
+        <div style="font-size:11px;font-weight:700;color:var(--text-muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">🔍 Filter Riwayat</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+          <div style="display:flex;flex-direction:column;gap:3px;flex:1;min-width:120px">
+            <label style="font-size:11px;color:var(--text-muted)">Dari</label>
+            <input type="date" class="input" id="riwayat-tgl-dari" value="${_riwayatTglDari}"
+              style="font-size:13px;padding:6px 10px"
+              onchange="onRiwayatFilterChange()" />
+          </div>
+          <div style="display:flex;flex-direction:column;gap:3px;flex:1;min-width:120px">
+            <label style="font-size:11px;color:var(--text-muted)">Sampai</label>
+            <input type="date" class="input" id="riwayat-tgl-sampai" value="${_riwayatTglSampai}"
+              style="font-size:13px;padding:6px 10px"
+              onchange="onRiwayatFilterChange()" />
+          </div>
+          ${(_riwayatTglDari || _riwayatTglSampai)
+            ? `<button class="btn btn-secondary btn-sm" onclick="resetRiwayatFilter()"
+                style="align-self:flex-end;padding:7px 10px">🗑️ Reset</button>`
+            : ''}
+        </div>
+      </div>
+      <div id="isi-stok-riwayat-body">
+        <div class="loading-state"><div class="loading-spinner"></div></div>
+      </div>`;
+    container.innerHTML = filterHTML;
+
+    const body = document.getElementById('isi-stok-riwayat-body');
 
     try {
-      const qSnap = await getDocs(query(
-        collection(db, 'eceran_pengisian'),
+      // Bangun constraints query
+      const qConstraints = [
         where('mitra_id', '==', isiStokMitraId),
-        orderBy('created_at', 'desc'),
-        limit(10)
-      ));
+        orderBy('created_at', 'desc')
+      ];
+
+      // Filter tanggal
+      if (_riwayatTglDari) {
+        qConstraints.push(where('created_at', '>=',
+          Timestamp.fromDate(new Date(_riwayatTglDari + 'T00:00:00'))));
+      }
+      if (_riwayatTglSampai) {
+        qConstraints.push(where('created_at', '<=',
+          Timestamp.fromDate(new Date(_riwayatTglSampai + 'T23:59:59'))));
+      }
+
+      // Limit hanya kalau tidak "tampilkan semua" dan tidak ada filter tanggal
+      const pakaLimit = !_riwayatShowAll && !_riwayatTglDari && !_riwayatTglSampai;
+      if (pakaLimit) qConstraints.push(limit(_RIWAYAT_LIMIT));
+
+      const qSnap = await getDocs(query(collection(db, 'eceran_pengisian'), ...qConstraints));
 
       if (qSnap.empty) {
-        container.innerHTML = `<div class="empty-state" style="padding:24px">
+        body.innerHTML = `<div class="empty-state" style="padding:20px">
           <span class="empty-icon" style="font-size:28px">📋</span>
-          <p>Belum ada riwayat pengisian untuk mitra ini</p></div>`;
+          <p style="font-size:13px">${(_riwayatTglDari || _riwayatTglSampai)
+            ? 'Tidak ada pengisian di rentang tanggal ini'
+            : 'Belum ada riwayat pengisian untuk mitra ini'}</p></div>`;
         return;
       }
 
       const rows = qSnap.docs.map(d => {
         const data = d.data();
-        const docId = d.id;
         return `<tr>
-          <td style="font-size:12px">${formatTanggal(data.created_at)}</td>
+          <td style="font-size:12px;white-space:nowrap">${formatTanggal(data.created_at)}</td>
           <td style="font-weight:600">${data.produk_nama}
-            ${data.diedit_oleh_nama ? `<br><span style="font-size:10px;color:var(--text-muted)">diedit: ${data.diedit_oleh_nama}</span>` : ''}
+            ${data.diedit_oleh_nama
+              ? `<br><span style="font-size:10px;color:var(--text-muted)">✏️ ${data.diedit_oleh_nama}</span>`
+              : ''}
           </td>
           <td style="font-weight:700;text-align:center">${data.jumlah_pcs}</td>
           <td>${SUMBER_BADGE[data.sumber] || data.sumber}</td>
           <td style="font-size:12px;color:var(--text-muted)">${data.diinput_oleh_nama}</td>
-          <td><button class="btn btn-secondary btn-sm" onclick="openEditPengisian('${docId}')">✏️</button></td>
+          <td><button class="btn btn-secondary btn-sm" onclick="openEditPengisian('${d.id}')">✏️</button></td>
         </tr>`;
       }).join('');
 
-      container.innerHTML = `
+      // Footer: info jumlah + tombol tampilkan semua
+      const hitLimit = pakaLimit && qSnap.docs.length >= _RIWAYAT_LIMIT;
+      const footerHTML = hitLimit
+        ? `<div style="text-align:center;padding:10px 0;border-top:1px solid var(--border)">
+            <span style="font-size:12px;color:var(--text-muted)">Menampilkan ${qSnap.docs.length} data terbaru</span>
+            <button class="btn btn-secondary btn-sm" onclick="tampilkanSemuaRiwayat()"
+              style="margin-left:10px">📋 Tampilkan Semua</button>
+          </div>`
+        : `<div style="text-align:right;padding:6px 2px">
+            <span style="font-size:11px;color:var(--text-muted)">Total: ${qSnap.docs.length} data</span>
+            ${_riwayatShowAll && !_riwayatTglDari && !_riwayatTglSampai
+              ? `<button class="btn btn-secondary btn-sm" onclick="ringkasRiwayat()"
+                  style="margin-left:8px">📌 Ringkas</button>`
+              : ''}
+          </div>`;
+
+      body.innerHTML = `
         <div class="table-wrap">
           <table>
             <thead>
@@ -3921,13 +3994,40 @@
             </thead>
             <tbody>${rows}</tbody>
           </table>
-        </div>`;
+        </div>
+        ${footerHTML}`;
     } catch (err) {
-      container.innerHTML = `<div class="info-box info-box-amber">⚠️ ${err.message.includes('index')
-        ? 'Membutuhkan index Firestore. Sementara riwayat tidak bisa ditampilkan.'
-        : err.message}</div>`;
+      body.innerHTML = `<div class="info-box info-box-amber" style="margin-top:8px">⚠️ ${
+        err.message.includes('index')
+          ? 'Membutuhkan index Firestore. Coba buka link index di konsol browser.'
+          : err.message}</div>`;
     }
   }
+
+  // Callback saat input tanggal berubah
+  window.onRiwayatFilterChange = function() {
+    _riwayatTglDari   = document.getElementById('riwayat-tgl-dari')?.value  || '';
+    _riwayatTglSampai = document.getElementById('riwayat-tgl-sampai')?.value || '';
+    _riwayatShowAll = false; // reset show-all saat ganti filter tanggal
+    loadIsiStokRiwayat();
+  };
+
+  window.resetRiwayatFilter = function() {
+    _riwayatTglDari   = '';
+    _riwayatTglSampai = '';
+    _riwayatShowAll   = false;
+    loadIsiStokRiwayat();
+  };
+
+  window.tampilkanSemuaRiwayat = function() {
+    _riwayatShowAll = true;
+    loadIsiStokRiwayat();
+  };
+
+  window.ringkasRiwayat = function() {
+    _riwayatShowAll = false;
+    loadIsiStokRiwayat();
+  };
 
   /* ============================================================
      EDIT PENGISIAN STOK
