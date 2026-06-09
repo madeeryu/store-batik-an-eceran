@@ -1182,6 +1182,33 @@
       </div>
 
       <!-- ======================================================= -->
+      <!-- PAGE: RETUR PRODUK                                       -->
+      <!-- ======================================================= -->
+      <div class="page" id="page-retur">
+        <div class="page-header">
+          <div class="page-title">Retur Produk</div>
+          <div class="page-subtitle">Catat produk yang dikembalikan — stok otomatis kembali ke keranjang mitra</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px" id="retur-layout">
+          <div class="card" id="retur-form-card">
+            <div class="section-title">↩️ Form Retur</div>
+            <div id="retur-form-content">
+              <div class="loading-state"><div class="loading-spinner"></div></div>
+            </div>
+          </div>
+          <div>
+            <div class="section-title">📋 Riwayat Retur</div>
+            <div id="retur-riwayat-content">
+              <div class="loading-state"><div class="loading-spinner"></div></div>
+            </div>
+          </div>
+        </div>
+        <style>
+          @media (max-width: 767px) { #retur-layout { grid-template-columns: 1fr !important; } }
+        </style>
+      </div>
+
+      <!-- ======================================================= -->
       <!-- PAGE: REKAP                                              -->
       <!-- ======================================================= -->
       <div class="page" id="page-rekap">
@@ -1997,12 +2024,14 @@
     { page: 'input-laku', icon: '📝', label: 'Input Laku' },
     { page: 'stok-keranjang', icon: '🛒', label: 'Stok Keranjang' },
     { page: 'rekap', icon: '📊', label: 'Rekap' },
+    { page: 'retur', icon: '↩️', label: 'Retur' },
   ];
   const NAV_KARYAWAN = [
     { page: 'dashboard', icon: '🏠', label: 'Dashboard' },
     { page: 'input-laku', icon: '📝', label: 'Input Laku' },
     { page: 'stok-keranjang', icon: '🛒', label: 'Stok Keranjang' },
     { page: 'isi-stok', icon: '📦', label: 'Isi Stok' },
+    { page: 'retur', icon: '↩️', label: 'Retur' },
     { page: 'rekap', icon: '📊', label: 'Rekap' },
     { page: 'analisis-profit', icon: '📈', label: 'Analisis Profit' },
   ];
@@ -2011,6 +2040,7 @@
     { page: 'input-laku', icon: '📝', label: 'Input Laku' },
     { page: 'stok-keranjang', icon: '🛒', label: 'Stok Keranjang' },
     { page: 'isi-stok', icon: '📦', label: 'Isi Stok' },
+    { page: 'retur', icon: '↩️', label: 'Retur' },
     { page: 'rekap', icon: '📊', label: 'Rekap' },
     { page: 'analisis-profit', icon: '📈', label: 'Analisis Profit' },
     { page: 'master-produk', icon: '🏷️', label: 'Master Produk' },
@@ -2098,6 +2128,7 @@
     'input-laku': 'Input Laku',
     'stok-keranjang': 'Stok Keranjang',
     'isi-stok': 'Isi Stok',
+    'retur': 'Retur Produk',
     'rekap': 'Rekap',
     'analisis-profit': 'Analisis Profit',
     'master-produk': 'Master Produk',
@@ -4385,7 +4416,27 @@
       const snap = await getDocs(q);
       const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
 
-      if (!docs.length) {
+      // Fetch retur dalam periode yang sama
+      let returDocs = [];
+      try {
+        let qRetur;
+        if (filterMitraId) {
+          qRetur = query(collection(db, 'eceran_retur'),
+            where('mitra_id', '==', filterMitraId),
+            where('tanggal', '>=', Timestamp.fromDate(startDate)),
+            where('tanggal', '<=', Timestamp.fromDate(endDate)),
+            orderBy('tanggal', 'desc'));
+        } else {
+          qRetur = query(collection(db, 'eceran_retur'),
+            where('tanggal', '>=', Timestamp.fromDate(startDate)),
+            where('tanggal', '<=', Timestamp.fromDate(endDate)),
+            orderBy('tanggal', 'desc'));
+        }
+        const rSnap = await getDocs(qRetur);
+        returDocs = rSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      } catch(e) { console.warn('Retur query:', e.message); }
+
+      if (!docs.length && !returDocs.length) {
         content.innerHTML = `<div class="empty-state"><span class="empty-icon">📊</span>
           <h3>Tidak ada data pada periode ini</h3><p>Coba pilih rentang tanggal yang berbeda.</p></div>`;
         return;
@@ -4427,7 +4478,7 @@
 
         renderRekapMatrix(content, docs, pengisianDocs, stokSekarangMap);
       } else {
-        renderRekapTabel(content, docs);
+        renderRekapTabel(content, docs, returDocs);
       }
     } catch (err) {
       content.innerHTML = `<div class="info-box info-box-red">⚠️ ${err.message.includes('index')
@@ -4620,7 +4671,7 @@
     }
   };
 
-  function renderRekapTabel(container, docs) {
+  function renderRekapTabel(container, docs, returDocs = []) {
     let totalOmzet = 0, totalProfit = 0, totalPcs = 0;
 
     const rows = docs.map(data => {
@@ -4630,7 +4681,6 @@
       totalOmzet += data.total || 0;
       totalProfit += data.total_profit || 0;
 
-      // Items ringkas
       const itemsLabel = items.length <= 2
         ? items.map(i => `${i.produk_nama} ${i.jumlah_pcs}pcs`).join(', ')
         : `${items.slice(0,2).map(i => `${i.produk_nama} ${i.jumlah_pcs}pcs`).join(', ')} +${items.length - 2} lainnya`;
@@ -4650,28 +4700,53 @@
       </tr>`;
     }).join('');
 
+    // Baris retur (berwarna merah muda sebagai pengurang)
+    const totalRetur = returDocs.reduce((s, r) => s + (r.total_retur || 0), 0);
+    const totalPcsRetur = returDocs.reduce((s, r) => s + (r.jumlah_pcs || 0), 0);
+    const returRows = returDocs.map(r => {
+      const tgl = r.tanggal?.toDate ? r.tanggal.toDate() : new Date();
+      return `<tr style="background:#fff7f7">
+        <td style="white-space:nowrap;color:var(--red-text)">↩️ ${tgl.toLocaleDateString('id-ID', {day:'2-digit',month:'short',year:'numeric'})}</td>
+        <td style="font-weight:600;color:var(--red-text)">${r.mitra_nama}</td>
+        <td style="font-size:12px;color:var(--red-text)">${r.produk_nama}${r.keterangan ? ` — ${r.keterangan}` : ''}</td>
+        <td style="text-align:center;color:var(--red-text)">−${r.jumlah_pcs}</td>
+        <td style="font-weight:700;color:var(--red-text)">−${formatRupiah(r.total_retur)}</td>
+        ${canSeeProfit() ? `<td style="color:var(--text-muted)">—</td>` : ''}
+        <td><span class="badge badge-red">↩️ Retur</span></td>
+      </tr>`;
+    }).join('');
+
+    const netOmzet = totalOmzet - totalRetur;
+    const returSummary = returDocs.length > 0 ? `
+      <div style="display:flex;gap:20px;justify-content:flex-end;margin-top:8px;flex-wrap:wrap;padding:10px 14px;background:#fff7f7;border-radius:9px;border:1px solid #fca5a5">
+        <div style="font-size:13px;color:var(--red-text)">Total Retur: <strong>−${totalPcsRetur} pcs</strong></div>
+        <div style="font-size:13px;font-weight:700;color:var(--red-text)">Nilai Retur: −${formatRupiah(totalRetur)}</div>
+        <div style="font-size:14px;font-weight:800;color:var(--green)">Net Omzet: ${formatRupiah(netOmzet)}</div>
+      </div>` : '';
+
     container.innerHTML = `
       <div class="table-wrap">
         <table>
           <thead>
             <tr>
-              <th>Tanggal Pasaran</th>
+              <th>Tanggal</th>
               <th>Mitra</th>
               <th>Items</th>
-              <th style="text-align:center">Total Pcs</th>
-              <th>Total Omzet</th>
+              <th style="text-align:center">Pcs</th>
+              <th>Omzet</th>
               ${canSeeProfit() ? '<th>Profit</th>' : ''}
               <th>Status</th>
             </tr>
           </thead>
-          <tbody>${rows}</tbody>
+          <tbody>${rows}${returRows}</tbody>
         </table>
       </div>
       <div style="display:flex;gap:20px;justify-content:flex-end;margin-top:16px;flex-wrap:wrap">
         <div style="font-size:14px;color:var(--text-secondary)">Total Pcs: <strong>${totalPcs}</strong></div>
         <div style="font-size:14px;font-weight:700;color:var(--green)">Total Omzet: ${formatRupiah(totalOmzet)}</div>
         ${canSeeProfit() ? `<div style="font-size:14px;font-weight:700;color:var(--green-text)">Total Profit: ${formatRupiah(totalProfit)}</div>` : ''}
-      </div>`;
+      </div>
+      ${returSummary}`;
   }
 
   window.bukaDetailRekap = function(id) {
@@ -4875,6 +4950,9 @@
       }
       loadIsiStok();
     }
+    if (page === 'retur') {
+      loadRetur();
+    }
     if (page === 'rekap') {
       loadRekap();
     }
@@ -4898,6 +4976,303 @@
     if (page === 'pengaturan') {
       if (!isOwner()) { navigateTo('dashboard'); showToast('Halaman ini khusus owner', 'info'); return; }
       loadPengaturan();
+    }
+  };
+
+  /* ==========================================================
+     RETUR PRODUK ECERAN
+  ========================================================== */
+  let _returMitraId   = '';
+  let _returMitraNama = '';
+  let _returProdukList = []; // untuk autocomplete
+
+  async function loadRetur() {
+    const formContent   = document.getElementById('retur-form-content');
+    const riwayatContent = document.getElementById('retur-riwayat-content');
+    if (!formContent) return;
+
+    // Reset state
+    _returMitraId   = currentUserData?.role === 'mitra' ? (currentUserData.mitra_id || '') : '';
+    _returMitraNama = currentUserData?.role === 'mitra' ? (currentMitra?.nama || '') : '';
+
+    formContent.innerHTML = `<div class="loading-state"><div class="loading-spinner"></div></div>`;
+
+    try {
+      // Bangun HTML form
+      let mitraHTML = '';
+      if (currentUserData?.role === 'mitra') {
+        // Mitra: hanya lihat diri sendiri
+        mitraHTML = `<div class="form-group">
+          <label>Mitra</label>
+          <input class="input" value="${_returMitraNama}" readonly style="background:var(--bg);color:var(--text-muted)" />
+        </div>`;
+      } else {
+        // Owner/karyawan: pilih mitra
+        const ms = await getDocs(query(collection(db, 'mitra'), where('aktif', '==', true), orderBy('nama')));
+        const opts = ms.docs.map(d =>
+          `<option value="${d.id}" data-nama="${d.data().nama}">${d.data().nama}</option>`
+        ).join('');
+        mitraHTML = `<div class="form-group">
+          <label>Mitra <span style="color:var(--red-text)">*</span></label>
+          <select class="input" id="retur-mitra-select" onchange="onChangeReturMitra(this)">
+            <option value="">-- Pilih Mitra --</option>
+            ${opts}
+          </select>
+        </div>`;
+      }
+
+      formContent.innerHTML = `
+        ${mitraHTML}
+        <div class="form-group" id="retur-produk-wrap" style="${!_returMitraId ? 'display:none' : ''}">
+          <label>Produk <span style="color:var(--red-text)">*</span></label>
+          <div class="ac-wrapper">
+            <input type="text" class="input" id="ac-retur-produk" placeholder="Ketik nama produk..." autocomplete="off" />
+            <div class="ac-dropdown" id="ac-drop-retur-produk" style="display:none"></div>
+          </div>
+        </div>
+        <div id="retur-harga-default-info" style="font-size:12px;color:var(--text-muted);margin-bottom:8px;display:none"></div>
+        <div class="form-row" id="retur-qty-harga-wrap" style="${!_returMitraId ? 'display:none' : ''}">
+          <div class="form-group">
+            <label>Jumlah PCS <span style="color:var(--red-text)">*</span></label>
+            <input type="number" class="input" id="retur-jumlah-pcs" min="1" placeholder="0"
+              oninput="hitungTotalRetur()" />
+          </div>
+          <div class="form-group">
+            <label>Harga Retur / PCS <span style="color:var(--red-text)">*</span></label>
+            <input type="number" class="input" id="retur-harga-pcs" min="0" placeholder="Isi manual"
+              oninput="hitungTotalRetur()" />
+          </div>
+        </div>
+        <div id="retur-total-display" style="display:none;background:var(--amber-bg);border:1px solid #fde68a;border-radius:9px;padding:10px 14px;margin-bottom:14px;font-size:14px">
+          <span style="color:var(--amber-text);font-weight:700">Total Retur: </span>
+          <span id="retur-total-value" style="font-weight:800;color:var(--amber-text)">Rp 0</span>
+        </div>
+        <div class="form-group" id="retur-ket-wrap" style="${!_returMitraId ? 'display:none' : ''}">
+          <label>Keterangan <span style="font-weight:400;color:var(--text-muted)">(opsional)</span></label>
+          <input type="text" class="input" id="retur-keterangan" placeholder="misal: barang rusak, salah kirim..." />
+        </div>
+        <div class="info-box info-box-amber" style="font-size:12.5px;${!_returMitraId ? 'display:none' : ''}" id="retur-info-box">
+          ↩️ Stok produk di keranjang <strong id="retur-mitra-badge">${_returMitraNama}</strong> akan <strong>bertambah</strong> sesuai jumlah retur.
+        </div>
+        <div style="margin-top:16px">
+          <button class="btn btn-primary w-full" id="btn-simpan-retur" onclick="simpanRetur()">↩️ Simpan Retur</button>
+        </div>`;
+
+      // Init autocomplete jika mitra sudah terpilih (mode mitra login)
+      if (_returMitraId) {
+        await _loadReturProdukAC(_returMitraId);
+      }
+
+    } catch(e) {
+      formContent.innerHTML = `<div class="info-box info-box-red">⚠️ ${e.message}</div>`;
+    }
+
+    // Load riwayat
+    await loadRiwayatRetur();
+  }
+
+  window.onChangeReturMitra = async function(sel) {
+    _returMitraId   = sel.value;
+    _returMitraNama = sel.options[sel.selectedIndex]?.dataset.nama || '';
+
+    const show = !!_returMitraId;
+    ['retur-produk-wrap','retur-qty-harga-wrap','retur-ket-wrap','retur-info-box'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.style.display = show ? '' : 'none';
+    });
+    const badge = document.getElementById('retur-mitra-badge');
+    if (badge) badge.textContent = _returMitraNama;
+
+    // Reset autocomplete
+    clearAcWidget('ac-retur-produk', 'ac-drop-retur-produk');
+    const infoEl = document.getElementById('retur-harga-default-info');
+    if (infoEl) { infoEl.style.display = 'none'; infoEl.textContent = ''; }
+    const totEl = document.getElementById('retur-total-display');
+    if (totEl) totEl.style.display = 'none';
+
+    if (show) await _loadReturProdukAC(_returMitraId);
+  };
+
+  async function _loadReturProdukAC(mitraId) {
+    // Ambil semua produk eceran aktif
+    try {
+      const snap = await getDocs(query(collection(db, 'produk'), where('eceran.aktif', '==', true), orderBy('nama')));
+      _returProdukList = snap.docs.map(d => ({
+        id: d.id,
+        label: d.data().nama || d.id,
+        harga_pcs: d.data().eceran?.harga_pcs || 0,
+        meta: `Harga saat ini: ${formatRupiah(d.data().eceran?.harga_pcs || 0)}`
+      }));
+    } catch(e) {
+      // Fallback: ambil dari stok_eceran
+      try {
+        const seSnap = await getDocs(query(collection(db, 'stok_eceran'), where('mitra_id', '==', mitraId)));
+        _returProdukList = [];
+        for (const se of seSnap.docs) {
+          const d = se.data();
+          _returProdukList.push({ id: d.produk_id, label: d.produk_nama || d.produk_id, harga_pcs: d.harga_pcs || 0, meta: `Stok: ${d.stok_pcs || 0} pcs` });
+        }
+        _returProdukList.sort((a,b) => a.label.localeCompare(b.label, 'id'));
+      } catch(e2) { _returProdukList = []; }
+    }
+
+    initAcWidget('ac-retur-produk', 'ac-drop-retur-produk', _returProdukList, (item) => {
+      // Pre-fill harga dengan harga produk saat ini (bisa diubah manual)
+      const hargaEl = document.getElementById('retur-harga-pcs');
+      if (hargaEl && item.harga_pcs > 0) hargaEl.value = item.harga_pcs;
+      const infoEl = document.getElementById('retur-harga-default-info');
+      if (infoEl) {
+        infoEl.style.display = '';
+        infoEl.textContent = `💡 Harga default dari produk: ${formatRupiah(item.harga_pcs)} — bisa diubah manual untuk harga lama`;
+      }
+      hitungTotalRetur();
+    });
+  }
+
+  window.hitungTotalRetur = function() {
+    const jml   = parseInt(document.getElementById('retur-jumlah-pcs')?.value) || 0;
+    const harga = parseFloat(document.getElementById('retur-harga-pcs')?.value) || 0;
+    const total = jml * harga;
+    const totEl = document.getElementById('retur-total-display');
+    const valEl = document.getElementById('retur-total-value');
+    if (totEl) totEl.style.display = jml > 0 && harga > 0 ? '' : 'none';
+    if (valEl) valEl.textContent = formatRupiah(total);
+  };
+
+  window.simpanRetur = async function() {
+    const btn = document.getElementById('btn-simpan-retur');
+    if (!btn) return;
+
+    // Validasi
+    if (!_returMitraId) { showToast('Pilih mitra terlebih dahulu', 'error'); return; }
+    const produkItem = getAcSelected('ac-retur-produk');
+    if (!produkItem) { showToast('Pilih produk terlebih dahulu', 'error'); return; }
+    const jumlah = parseInt(document.getElementById('retur-jumlah-pcs')?.value) || 0;
+    if (jumlah <= 0) { showToast('Jumlah PCS harus lebih dari 0', 'error'); return; }
+    const hargaRetur = parseFloat(document.getElementById('retur-harga-pcs')?.value) || 0;
+    if (hargaRetur <= 0) { showToast('Harga retur harus diisi', 'error'); return; }
+    const keterangan = document.getElementById('retur-keterangan')?.value?.trim() || '';
+
+    btn.disabled = true;
+    btn.textContent = 'Menyimpan...';
+
+    try {
+      const batch = writeBatch(db);
+      const totalRetur = jumlah * hargaRetur;
+
+      // 1. Tulis ke eceran_retur
+      const returRef = doc(collection(db, 'eceran_retur'));
+      batch.set(returRef, {
+        mitra_id:           _returMitraId,
+        mitra_nama:         _returMitraNama,
+        produk_id:          produkItem.id,
+        produk_nama:        produkItem.label,
+        jumlah_pcs:         jumlah,
+        harga_retur:        hargaRetur,
+        total_retur:        totalRetur,
+        keterangan,
+        tanggal:            serverTimestamp(),
+        dicatat_oleh_uid:   currentUser.uid,
+        dicatat_oleh_nama:  currentUserData.nama || currentUser.email
+      });
+
+      // 2. Kembalikan stok ke keranjang mitra
+      batch.set(doc(db, 'stok_eceran', `${_returMitraId}_${produkItem.id}`), {
+        mitra_id:   _returMitraId,
+        produk_id:  produkItem.id,
+        stok_pcs:   increment(jumlah),
+        updated_at: serverTimestamp()
+      }, { merge: true });
+
+      await batch.commit();
+
+      showToast(`Retur ${jumlah} pcs ${produkItem.label} berhasil! Stok keranjang ${_returMitraNama} +${jumlah}`, 'success');
+
+      // Reset form (kecuali mitra)
+      clearAcWidget('ac-retur-produk', 'ac-drop-retur-produk');
+      const fields = ['retur-jumlah-pcs','retur-harga-pcs','retur-keterangan'];
+      fields.forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+      const infoEl = document.getElementById('retur-harga-default-info');
+      if (infoEl) { infoEl.style.display = 'none'; infoEl.textContent = ''; }
+      const totEl = document.getElementById('retur-total-display');
+      if (totEl) totEl.style.display = 'none';
+
+      await loadRiwayatRetur();
+    } catch(e) {
+      console.error(e);
+      showToast('Gagal simpan retur: ' + e.message, 'error');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '↩️ Simpan Retur';
+    }
+  };
+
+  async function loadRiwayatRetur() {
+    const container = document.getElementById('retur-riwayat-content');
+    if (!container) return;
+    container.innerHTML = `<div class="loading-state"><div class="loading-spinner"></div></div>`;
+
+    try {
+      let q;
+      if (currentUserData?.role === 'mitra') {
+        q = query(collection(db, 'eceran_retur'),
+          where('mitra_id', '==', currentUserData.mitra_id),
+          orderBy('tanggal', 'desc'), limit(30));
+      } else {
+        q = query(collection(db, 'eceran_retur'),
+          orderBy('tanggal', 'desc'), limit(50));
+      }
+      const snap = await getDocs(q);
+
+      if (snap.empty) {
+        container.innerHTML = `<div class="empty-state"><span class="empty-icon">↩️</span>
+          <h3>Belum ada retur</h3><p>Retur yang dicatat akan muncul di sini.</p></div>`;
+        return;
+      }
+
+      container.innerHTML = snap.docs.map(d => {
+        const r = d.data();
+        const tgl = r.tanggal?.toDate ? r.tanggal.toDate() : new Date();
+        const tglStr = tgl.toLocaleDateString('id-ID', { day:'2-digit', month:'short', year:'numeric' });
+        const jamStr = tgl.toLocaleTimeString('id-ID', { hour:'2-digit', minute:'2-digit' });
+        return `
+          <div style="background:var(--white);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:10px;">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px">
+              <div style="font-weight:700;font-size:14px">↩️ ${r.produk_nama}</div>
+              <span class="badge badge-amber">${r.jumlah_pcs} pcs</span>
+            </div>
+            <div style="font-size:12px;color:var(--text-muted);margin-bottom:4px">
+              🏷️ ${r.mitra_nama} · ${tglStr} ${jamStr}
+            </div>
+            <div style="font-size:13px;color:var(--amber-text);font-weight:700;margin-bottom:4px">
+              ${formatRupiah(r.harga_retur)}/pcs → Total: ${formatRupiah(r.total_retur)}
+            </div>
+            ${r.keterangan ? `<div style="font-size:12px;color:var(--text-secondary);font-style:italic">"${r.keterangan}"</div>` : ''}
+            <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Dicatat: ${r.dicatat_oleh_nama || '-'}</div>
+            ${isOwner() ? `<div style="margin-top:8px"><button class="btn btn-danger btn-sm" onclick="hapusRetur('${d.id}','${r.mitra_id}','${r.produk_id}',${r.jumlah_pcs})">🗑️ Hapus</button></div>` : ''}
+          </div>`;
+      }).join('');
+    } catch(e) {
+      container.innerHTML = `<div class="info-box info-box-red">⚠️ ${e.message}</div>`;
+    }
+  }
+
+  window.hapusRetur = async function(returId, mitraId, produkId, jumlahPcs) {
+    if (!confirm(`Hapus retur ini? Stok keranjang mitra akan dikurangi kembali ${jumlahPcs} pcs.`)) return;
+    try {
+      const batch = writeBatch(db);
+      // Hapus record retur
+      batch.delete(doc(db, 'eceran_retur', returId));
+      // Kurangi stok kembali (reverse stok yang sudah ditambahkan)
+      batch.set(doc(db, 'stok_eceran', `${mitraId}_${produkId}`), {
+        stok_pcs: increment(-jumlahPcs),
+        updated_at: serverTimestamp()
+      }, { merge: true });
+      await batch.commit();
+      showToast('Retur berhasil dihapus', 'success');
+      loadRiwayatRetur();
+    } catch(e) {
+      showToast('Gagal hapus retur: ' + e.message, 'error');
     }
   };
 
