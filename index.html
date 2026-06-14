@@ -1787,6 +1787,36 @@
 </div>
 
 <!-- ============================================================ -->
+<!-- MODAL: RIWAYAT STOK MITRA                                     -->
+<div class="modal-overlay" id="modal-riwayat-stok-mitra">
+  <div class="modal" style="max-width:540px">
+    <div class="modal-header">
+      <div class="modal-title" id="riwayat-stok-mitra-title">📋 Riwayat Stok Mitra</div>
+      <button class="modal-close" onclick="closeModal('modal-riwayat-stok-mitra')">✕</button>
+    </div>
+    <div style="padding:0 4px 8px">
+      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+        <select class="input" id="rsm-filter-jenis" onchange="filterRiwayatStokMitra()" style="flex:1;min-width:120px;padding:7px 10px;font-size:13px;border:1px solid var(--border);border-radius:8px">
+          <option value="">Semua Jenis</option>
+          <option value="tambah">📦 Ditambah</option>
+          <option value="terjual">🛒 Terjual</option>
+          <option value="retur">↩️ Retur</option>
+        </select>
+        <select class="input" id="rsm-filter-produk" onchange="filterRiwayatStokMitra()" style="flex:2;min-width:140px;padding:7px 10px;font-size:13px;border:1px solid var(--border);border-radius:8px">
+          <option value="">Semua Produk</option>
+        </select>
+      </div>
+      <div id="riwayat-stok-mitra-list" style="max-height:380px;overflow-y:auto"></div>
+      <div id="rsm-load-more" style="display:none;text-align:center;margin-top:8px">
+        <button class="btn btn-secondary btn-sm" onclick="loadMoreRiwayatStokMitra()">Lihat Lebih Banyak</button>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-riwayat-stok-mitra')">Tutup</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL: KIRIM REKAP KE GROSIR                                  -->
 <!-- ============================================================ -->
 <div class="modal-overlay" id="modal-kirim-ke-grosir">
@@ -2995,12 +3025,25 @@
         dikonfirmasi_at: serverTimestamp()
       });
 
-      // Kurangi stok_eceran per item
+      // Kurangi stok_eceran per item + catat log
       for (const item of penj.items) {
         const seRef = doc(db, 'stok_eceran', `${penj.mitra_id}_${item.produk_id}`);
         batch.update(seRef, {
           stok_pcs: increment(-item.jumlah_pcs),
           updated_at: serverTimestamp()
+        });
+        const logJualRef = doc(collection(db, 'stok_eceran_log'));
+        batch.set(logJualRef, {
+          mitra_id:   penj.mitra_id,
+          mitra_nama: penj.mitra_nama,
+          produk_id:  item.produk_id,
+          produk_nama: item.produk_nama,
+          jenis:      'terjual',
+          jumlah_pcs: -item.jumlah_pcs,
+          keterangan: `Penjualan dikonfirmasi`,
+          dicatat_oleh_uid:  currentUser.uid,
+          dicatat_oleh_nama: currentUserData.nama,
+          created_at: serverTimestamp()
         });
       }
 
@@ -3481,7 +3524,12 @@
       </tr>`;
     }).join('');
 
+    const mitraId   = currentUserData?.mitra_id || '';
+    const mitraNama = currentMitra?.nama || '';
     container.innerHTML = `
+      ${mitraId ? `<div style="display:flex;justify-content:flex-end;margin-bottom:10px">
+        <button class="btn btn-secondary btn-sm" onclick="openRiwayatStokMitra('${mitraId}','${mitraNama.replace(/'/g,"\\'")}')">📋 Riwayat Stok Keranjang</button>
+      </div>` : ''}
       <div class="table-wrap">
         <table>
           <thead>
@@ -3620,7 +3668,10 @@
               <div style="font-weight:800;font-size:16px">${mitra.nama}</div>
               ${kritisWarning}
             </div>
-            <button class="btn btn-primary btn-sm" onclick="window._prefillMitra='${mitra.id}';navigateTo('isi-stok')">📦 Isi Stok</button>
+            <div style="display:flex;gap:6px">
+              <button class="btn btn-secondary btn-sm" onclick="openRiwayatStokMitra('${mitra.id}','${mitra.nama.replace(/'/g,"\\'")}')">📋 Riwayat</button>
+              <button class="btn btn-primary btn-sm" onclick="window._prefillMitra='${mitra.id}';navigateTo('isi-stok')">📦 Isi Stok</button>
+            </div>
           </div>
           <div class="table-wrap">
             <table>
@@ -4005,6 +4056,24 @@
         tanggal_pasaran: Timestamp.fromDate(new Date()),
         diinput_oleh_uid: currentUser.uid,
         diinput_oleh_nama: currentUserData?.nama || '-',
+        created_at: serverTimestamp()
+      });
+
+      // Catat ke riwayat stok eceran per mitra
+      const sumberLabel = sumber === 'stok_mobil_grosir' ? 'Stok Mobil Grosir'
+        : sumber === 'stok_rumah_grosir' ? 'Stok Rumah Grosir'
+        : sumber === 'stok_rumah_eceran' ? 'Stok Rumah Eceran' : sumber;
+      const logIsiRef = doc(collection(db, 'stok_eceran_log'));
+      batch.set(logIsiRef, {
+        mitra_id:   isiStokMitraId,
+        mitra_nama: isiStokMitraNama,
+        produk_id:  produkId,
+        produk_nama: produkNama,
+        jenis:      'tambah',
+        jumlah_pcs: jumlahPcs,
+        keterangan: `Isi stok dari ${sumberLabel}`,
+        dicatat_oleh_uid:  currentUser.uid,
+        dicatat_oleh_nama: currentUserData?.nama || '-',
         created_at: serverTimestamp()
       });
 
@@ -4575,19 +4644,68 @@
         });
       });
 
-      _kirimGrosirData = Object.values(grouped);
-      const totalOmzet  = _kirimGrosirData.reduce((s, g) => s + g.total_nominal, 0);
-      const totalProfit = _kirimGrosirData.reduce((s, g) => s + g.total_profit,  0);
-      const totalPcs    = _kirimGrosirData.reduce((s, g) => s + g.total_pcs,     0);
+      // Ambil retur dalam periode yang sama, kurangi dari total per mitra
+      const returByMitra = {};
+      try {
+        let qRetur2;
+        if (filterMitraId) {
+          qRetur2 = query(collection(db, 'eceran_retur'),
+            where('mitra_id', '==', filterMitraId),
+            where('tanggal', '>=', Timestamp.fromDate(startDate)),
+            where('tanggal', '<=', Timestamp.fromDate(endDate)));
+        } else {
+          qRetur2 = query(collection(db, 'eceran_retur'),
+            where('tanggal', '>=', Timestamp.fromDate(startDate)),
+            where('tanggal', '<=', Timestamp.fromDate(endDate)));
+        }
+        const rSnap2 = await getDocs(qRetur2);
+        rSnap2.forEach(d => {
+          const r = d.data();
+          if (!returByMitra[r.mitra_id]) returByMitra[r.mitra_id] = { mitra_nama: r.mitra_nama, total_retur: 0, total_pcs_retur: 0 };
+          returByMitra[r.mitra_id].total_retur     += r.total_retur || 0;
+          returByMitra[r.mitra_id].total_pcs_retur += r.jumlah_pcs || 0;
+        });
+      } catch(e) { console.warn('Retur kirim query:', e.message); }
 
-      // Baris preview per mitra per tanggal
-      const previewRows = _kirimGrosirData.map(g => `
+      // Buat entri retur (nilai negatif) untuk setiap mitra yang ada retur
+      const returEntries = Object.entries(returByMitra).map(([mitraId, rd]) => ({
+        _docId: `eceran_retur_${mitraId}_${tglMulai}_${tglSelesai}`,
+        mitra_id: mitraId,
+        mitra_nama: rd.mitra_nama,
+        tanggal_str: tglSelesai, // gunakan tanggal akhir periode
+        total_pcs: -rd.total_pcs_retur,
+        total_nominal: -rd.total_retur,
+        total_profit: 0,
+        items: [],
+        is_retur: true
+      }));
+
+      _kirimGrosirData = [...Object.values(grouped), ...returEntries];
+      const penjEntries  = Object.values(grouped);
+      const totalOmzet   = penjEntries.reduce((s, g) => s + g.total_nominal, 0);
+      const totalRetur   = returEntries.reduce((s, g) => s + Math.abs(g.total_nominal), 0);
+      const netOmzet     = totalOmzet - totalRetur;
+      const totalProfit  = penjEntries.reduce((s, g) => s + g.total_profit, 0);
+      const totalPcs     = penjEntries.reduce((s, g) => s + g.total_pcs, 0);
+
+      // Baris preview penjualan
+      const previewRows = penjEntries.map(g => `
         <tr>
           <td style="font-weight:600">${g.mitra_nama}</td>
           <td style="font-size:12px;color:var(--text-muted)">${g.tanggal_str}</td>
           <td style="text-align:center">${g.total_pcs} pcs</td>
           <td style="font-weight:700;color:var(--green)">${formatRupiah(g.total_nominal)}</td>
           ${canSeeProfit() ? `<td style="color:var(--green-text)">${formatRupiah(g.total_profit)}</td>` : ''}
+        </tr>`).join('');
+
+      // Baris preview retur
+      const returRows = returEntries.map(g => `
+        <tr style="background:#fff7f7">
+          <td style="font-weight:600;color:var(--red-text)">↩️ ${g.mitra_nama}</td>
+          <td style="font-size:12px;color:var(--red-text)">Retur periode</td>
+          <td style="text-align:center;color:var(--red-text)">${g.total_pcs} pcs</td>
+          <td style="font-weight:700;color:var(--red-text)">−${formatRupiah(Math.abs(g.total_nominal))}</td>
+          ${canSeeProfit() ? `<td>—</td>` : ''}
         </tr>`).join('');
 
       body.innerHTML = `
@@ -4606,19 +4724,23 @@
                 ${canSeeProfit() ? '<th>Profit</th>' : ''}
               </tr>
             </thead>
-            <tbody>${previewRows}</tbody>
+            <tbody>${previewRows}${returRows}</tbody>
           </table>
         </div>
         <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px">
           <div style="font-size:13px"><span style="color:var(--text-muted)">Total Omzet:</span>
             <strong style="color:var(--green);margin-left:4px">${formatRupiah(totalOmzet)}</strong></div>
+          ${totalRetur > 0 ? `<div style="font-size:13px"><span style="color:var(--text-muted)">Total Retur:</span>
+            <strong style="color:var(--red-text);margin-left:4px">−${formatRupiah(totalRetur)}</strong></div>
+          <div style="font-size:13px"><span style="color:var(--text-muted)">Net ke Grosir:</span>
+            <strong style="color:var(--green);margin-left:4px">${formatRupiah(netOmzet)}</strong></div>` : ''}
           <div style="font-size:13px"><span style="color:var(--text-muted)">Total Pcs:</span>
             <strong style="margin-left:4px">${totalPcs} pcs</strong></div>
           ${canSeeProfit() ? `<div style="font-size:13px"><span style="color:var(--text-muted)">Total Profit:</span>
             <strong style="color:var(--green-text);margin-left:4px">${formatRupiah(totalProfit)}</strong></div>` : ''}
         </div>
         <div class="info-box info-box-amber" style="font-size:12px">
-          ⚠️ Data dikirim sebagai <strong>${_kirimGrosirData.length} record</strong> (per mitra per tanggal).
+          ⚠️ Data dikirim sebagai <strong>${_kirimGrosirData.length} record</strong> (penjualan per mitra per tanggal + koreksi retur).
           Jika rekap hari yang sama sudah pernah dikirim, data lama akan <strong>ditimpa</strong>.
         </div>`;
 
@@ -5184,6 +5306,21 @@
         updated_at: serverTimestamp()
       }, { merge: true });
 
+      // 3. Catat ke riwayat stok eceran per mitra
+      const logReturRef = doc(collection(db, 'stok_eceran_log'));
+      batch.set(logReturRef, {
+        mitra_id:   _returMitraId,
+        mitra_nama: _returMitraNama,
+        produk_id:  produkItem.id,
+        produk_nama: produkItem.label,
+        jenis:      'retur',
+        jumlah_pcs: jumlah,
+        keterangan: keterangan || `Retur produk`,
+        dicatat_oleh_uid:  currentUser.uid,
+        dicatat_oleh_nama: currentUserData.nama || currentUser.email,
+        created_at: serverTimestamp()
+      });
+
       await batch.commit();
 
       showToast(`Retur ${jumlah} pcs ${produkItem.label} berhasil! Stok keranjang ${_returMitraNama} +${jumlah}`, 'success');
@@ -5274,6 +5411,108 @@
     } catch(e) {
       showToast('Gagal hapus retur: ' + e.message, 'error');
     }
+  };
+
+  /* ==========================================================
+     RIWAYAT STOK PER MITRA (stok_eceran_log)
+  ========================================================== */
+  let _rsmMitraId   = null;
+  let _rsmMitraNama = '';
+  let _rsmAllLogs   = [];
+  let _rsmLimit     = 30;
+
+  window.openRiwayatStokMitra = async function(mitraId, mitraNama) {
+    _rsmMitraId   = mitraId;
+    _rsmMitraNama = mitraNama;
+    _rsmLimit     = 30;
+    document.getElementById('riwayat-stok-mitra-title').textContent = `📋 Riwayat Stok — ${mitraNama}`;
+    document.getElementById('rsm-filter-jenis').value   = '';
+    document.getElementById('rsm-filter-produk').value  = '';
+    document.getElementById('riwayat-stok-mitra-list').innerHTML =
+      `<div class="loading-state"><div class="loading-spinner"></div> Memuat riwayat...</div>`;
+    openModal('modal-riwayat-stok-mitra');
+    await _fetchRiwayatStokMitra();
+  };
+
+  async function _fetchRiwayatStokMitra() {
+    const listEl = document.getElementById('riwayat-stok-mitra-list');
+    try {
+      const snap = await getDocs(query(
+        collection(db, 'stok_eceran_log'),
+        where('mitra_id', '==', _rsmMitraId),
+        orderBy('created_at', 'desc'),
+        limit(_rsmLimit)
+      ));
+      _rsmAllLogs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+      // Isi dropdown produk
+      const produkSet = new Set(_rsmAllLogs.map(l => l.produk_nama).filter(Boolean));
+      const produkSel = document.getElementById('rsm-filter-produk');
+      const prevProduk = produkSel.value;
+      produkSel.innerHTML = '<option value="">Semua Produk</option>' +
+        [...produkSet].sort().map(n => `<option value="${n}">${n}</option>`).join('');
+      if (prevProduk) produkSel.value = prevProduk;
+
+      document.getElementById('rsm-load-more').style.display = _rsmAllLogs.length >= _rsmLimit ? 'block' : 'none';
+      _renderRiwayatStokMitra(listEl);
+    } catch(e) {
+      listEl.innerHTML = `<div style="color:var(--red-text);padding:16px">⚠️ Gagal memuat: ${e.message}</div>`;
+    }
+  }
+
+  function _renderRiwayatStokMitra(listEl) {
+    const filterJenis  = document.getElementById('rsm-filter-jenis')?.value  || '';
+    const filterProduk = document.getElementById('rsm-filter-produk')?.value || '';
+
+    let logs = _rsmAllLogs;
+    if (filterJenis)  logs = logs.filter(l => l.jenis === filterJenis);
+    if (filterProduk) logs = logs.filter(l => l.produk_nama === filterProduk);
+
+    if (!logs.length) {
+      listEl.innerHTML = `<div class="empty-state" style="padding:32px;text-align:center">
+        <div style="font-size:32px;margin-bottom:8px">📋</div>
+        <p style="color:var(--text-muted)">Belum ada riwayat pergerakan stok</p></div>`;
+      return;
+    }
+
+    const jenisConfig = {
+      tambah:  { icon: '📦', label: 'Ditambah',  color: '#16A34A', bg: '#F0FDF4' },
+      terjual: { icon: '🛒', label: 'Terjual',   color: '#DC2626', bg: '#FFF5F5' },
+      retur:   { icon: '↩️', label: 'Retur',     color: '#D97706', bg: '#FFFBEB' }
+    };
+
+    listEl.innerHTML = logs.map(log => {
+      const cfg = jenisConfig[log.jenis] || { icon: '📌', label: log.jenis, color: 'var(--text-primary)', bg: 'transparent' };
+      const tgl = log.created_at?.toDate ? log.created_at.toDate() : new Date();
+      const tglStr = tgl.toLocaleDateString('id-ID', { day:'2-digit', month:'short', year:'numeric' });
+      const jamStr = tgl.toLocaleTimeString('id-ID', { hour:'2-digit', minute:'2-digit' });
+      const plus = log.jumlah_pcs > 0;
+      return `
+        <div style="display:flex;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">
+          <div style="width:36px;height:36px;border-radius:8px;background:${cfg.bg};display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">${cfg.icon}</div>
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px">
+              <div>
+                <span style="font-weight:700;font-size:13.5px">${log.produk_nama}</span>
+                <span style="font-size:11px;font-weight:600;padding:2px 7px;border-radius:99px;background:${cfg.bg};color:${cfg.color};margin-left:6px">${cfg.label}</span>
+              </div>
+              <div style="font-weight:800;font-size:15px;color:${cfg.color};white-space:nowrap">${plus ? '+' : ''}${log.jumlah_pcs} pcs</div>
+            </div>
+            <div style="font-size:11.5px;color:var(--text-muted);margin-top:3px">${log.keterangan || ''}</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:2px">${tglStr} · ${jamStr} · ${log.dicatat_oleh_nama || '-'}</div>
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  window.filterRiwayatStokMitra = function() {
+    const listEl = document.getElementById('riwayat-stok-mitra-list');
+    _renderRiwayatStokMitra(listEl);
+  };
+
+  window.loadMoreRiwayatStokMitra = async function() {
+    _rsmLimit += 30;
+    await _fetchRiwayatStokMitra();
   };
 
   /* ==========================================================
