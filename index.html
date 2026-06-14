@@ -1145,6 +1145,13 @@
             </div>
             <div id="stok-keranjang-actions"></div>
           </div>
+          <!-- Search real-time -->
+          <div style="position:relative;margin-top:12px;max-width:340px">
+            <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:14px;color:var(--text-muted)">🔍</span>
+            <input type="text" id="stok-keranjang-search" placeholder="Cari nama produk..." autocomplete="off"
+              oninput="onStokKeranjangSearch(this.value)"
+              style="width:100%;padding:9px 12px 9px 34px;border:1.5px solid var(--input-border);border-radius:9px;font-size:14px;font-family:inherit;outline:none" />
+          </div>
           <div id="stok-keranjang-filter" class="mt-16"></div>
         </div>
         <div id="stok-keranjang-content">
@@ -1302,6 +1309,13 @@
             <button class="btn btn-primary btn-sm" id="tab-semua-eceran" onclick="setMasterProdukTab('semua')">Semua Produk Eceran</button>
             <button class="btn btn-secondary btn-sm" id="tab-khusus-eceran" onclick="setMasterProdukTab('khusus')">Khusus Eceran</button>
             <button class="btn btn-secondary btn-sm" id="tab-juga-grosir" onclick="setMasterProdukTab('grosir')">Yang Juga di Grosir</button>
+          </div>
+          <!-- Search real-time -->
+          <div style="position:relative;margin-top:12px;max-width:340px">
+            <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:14px;color:var(--text-muted)">🔍</span>
+            <input type="text" id="master-produk-search" placeholder="Cari nama produk..." autocomplete="off"
+              oninput="onMasterProdukSearch(this.value)"
+              style="width:100%;padding:9px 12px 9px 34px;border:1.5px solid var(--input-border);border-radius:9px;font-size:14px;font-family:inherit;outline:none" />
           </div>
         </div>
         <div class="card">
@@ -3538,12 +3552,18 @@
 
   function _renderMitraStokTable(container, allItems, filterKat) {
     let items = filterKat ? allItems.filter(i => i._kategori === filterKat) : allItems;
+
+    // Filter pencarian nama produk (real-time)
+    const _q = (_stokKeranjangSearch || '').trim().toLowerCase();
+    if (_q) items = items.filter(i => (i.produk_nama || '').toLowerCase().includes(_q));
+
     // Sort A-Z
     items = [...items].sort((a, b) => (a.produk_nama || '').localeCompare(b.produk_nama || '', 'id'));
 
     if (!items.length) {
+      const msg = _q ? `Tidak ada produk yang cocok dengan "<strong>${_q}</strong>".` : 'Tidak ada produk dalam kategori ini.';
       container.innerHTML = `<div class="empty-state"><span class="empty-icon">🔍</span>
-        <h3>Tidak ada produk</h3><p>Tidak ada produk dalam kategori ini.</p></div>`;
+        <h3>Tidak ada produk</h3><p>${msg}</p></div>`;
       return;
     }
 
@@ -3666,11 +3686,15 @@
     const valMap = window._produkValMap || {};
     let grandModal = 0, grandProfit = 0, grandPcs = 0;
 
+    const _q = (_stokKeranjangSearch || '').trim().toLowerCase();
     const cardsHTML = filteredMitra.map(mitra => {
       let items = stokByMitra[mitra.id] || [];
 
       // Filter by kategori
       if (filterKat) items = items.filter(i => i._kategori === filterKat);
+
+      // Filter by pencarian nama produk (real-time)
+      if (_q) items = items.filter(i => (i.produk_nama || '').toLowerCase().includes(_q));
 
       // Sort A-Z
       items = [...items].sort((a, b) => (a.produk_nama || '').localeCompare(b.produk_nama || '', 'id'));
@@ -3679,6 +3703,8 @@
       const kritisWarning = kritis > 0 ? `<span class="badge badge-red">⚠️ ${kritis} item habis</span>` : '';
 
       if (!items.length) {
+        // Saat mencari, sembunyikan mitra tanpa hasil agar fokus ke yang cocok
+        if (_q) return '';
         return `<div class="card mb-16">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
             <div style="font-weight:800;font-size:16px">${mitra.nama}</div>
@@ -3764,10 +3790,26 @@
         </div>
       </div>`;
 
-    container.innerHTML = banner + cardsHTML;
+    const noResult = (_q && !cardsHTML.trim())
+      ? `<div class="empty-state"><span class="empty-icon">🔍</span><h3>Tidak ada produk</h3><p>Tidak ada produk yang cocok dengan "<strong>${_q}</strong>".</p></div>`
+      : '';
+    container.innerHTML = banner + (cardsHTML.trim() ? cardsHTML : noResult);
   }
 
   let _stokKeranjangKategori = '';
+  let _stokKeranjangSearch = '';
+
+  window.onStokKeranjangSearch = function(val) {
+    _stokKeranjangSearch = val || '';
+    const container = document.getElementById('stok-keranjang-content');
+    if (!container) return;
+    if (currentUserData.role === 'mitra') {
+      renderStokKeranjangMitraFiltered(container);
+    } else {
+      const mitraVal = document.getElementById('filter-mitra-stok')?.value || '';
+      renderStokKeranjangCards(container, window._mitraListStok, window._stokByMitra, mitraVal, _stokKeranjangKategori);
+    }
+  };
 
   window.onFilterMitraStok = function(sel) {
     const container = document.getElementById('stok-keranjang-content');
@@ -5154,6 +5196,9 @@
   window._navigateExtension = function(page) {
     // Page dari Bagian 2
     if (page === 'stok-keranjang') {
+      _stokKeranjangSearch = '';
+      const _sks = document.getElementById('stok-keranjang-search');
+      if (_sks) _sks.value = '';
       loadStokKeranjang();
     }
     if (page === 'isi-stok') {
@@ -5653,8 +5698,15 @@
   ========================================================== */
   let _masterProdukTab = 'semua';
   let _masterProdukKategori = ''; // '' = semua kategori
+  let _masterProdukSearch = '';   // kata kunci pencarian (real-time)
+  let _mpAllDocs = [];            // cache dokumen produk agar search tidak re-fetch
   let _editProdukId = null;
   let _editProdukData = null;
+
+  window.onMasterProdukSearch = function(val) {
+    _masterProdukSearch = val || '';
+    loadMasterProduk(true); // pakai cache, tidak fetch ulang
+  };
 
   window.setMasterProdukTab = function(tab) {
     _masterProdukTab = tab;
@@ -5671,52 +5723,60 @@
     loadMasterProduk(); // loadMasterProduk akan re-render chips dengan state terbaru
   };
 
-  async function loadMasterProduk() {
+  async function loadMasterProduk(useCache = false) {
     const cont = document.getElementById('master-produk-content');
-    cont.innerHTML = '<div class="loading-state"><div class="loading-spinner"></div> Memuat...</div>';
     try {
-      const snap = await window._getDocs(window._collection(window._db, 'produk'));
-      const allProdukDocs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      let produkList = allProdukDocs.slice();
+      let allProdukDocs;
+      if (useCache && _mpAllDocs.length) {
+        // Render dari cache (dipakai oleh search real-time) — tanpa fetch & tanpa loading flicker
+        allProdukDocs = _mpAllDocs;
+      } else {
+        cont.innerHTML = '<div class="loading-state"><div class="loading-spinner"></div> Memuat...</div>';
+        const snap = await window._getDocs(window._collection(window._db, 'produk'));
+        allProdukDocs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        _mpAllDocs = allProdukDocs;
 
-      // ---- Hitung nilai stok keseluruhan (rumah + keranjang) ----
-      // Peta modal & harga per produk untuk valuasi keranjang
-      const valMap = {};
-      allProdukDocs.forEach(p => {
-        valMap[p.id] = { modal: p.eceran?.modal_pcs ?? 0, harga: p.eceran?.harga_pcs ?? 0 };
-      });
-      // Nilai stok rumah eceran (produk khusus eceran)
-      let rumahModal = 0, rumahProfit = 0, rumahPcs = 0;
-      allProdukDocs.forEach(p => {
-        if (p.is_khusus_eceran === true) {
-          const stok = p.stok_rumah_eceran ?? 0;
-          const modal = p.eceran?.modal_pcs ?? 0;
-          const harga = p.eceran?.harga_pcs ?? 0;
-          rumahPcs    += stok;
-          rumahModal  += stok * modal;
-          rumahProfit += stok * (harga - modal);
-        }
-      });
-      // Nilai stok keranjang (semua mitra) — join modal/harga dari produk
-      let keranjangModal = 0, keranjangProfit = 0, keranjangPcs = 0;
-      try {
-        const seSnap = await window._getDocs(window._collection(window._db, 'stok_eceran'));
-        seSnap.forEach(d => {
-          const data = d.data();
-          const stok = data.stok_pcs || 0;
-          if (stok <= 0) return;
-          const v = valMap[data.produk_id] || { modal: 0, harga: 0 };
-          keranjangPcs    += stok;
-          keranjangModal  += stok * v.modal;
-          keranjangProfit += stok * (v.harga - v.modal);
+        // ---- Hitung nilai stok keseluruhan (rumah + keranjang) ----
+        // Peta modal & harga per produk untuk valuasi keranjang
+        const valMap = {};
+        allProdukDocs.forEach(p => {
+          valMap[p.id] = { modal: p.eceran?.modal_pcs ?? 0, harga: p.eceran?.harga_pcs ?? 0 };
         });
-      } catch(e) { console.warn('valuasi keranjang error:', e.message); }
-      window._nilaiStokSummary = {
-        rumahModal, rumahProfit, rumahPcs,
-        keranjangModal, keranjangProfit, keranjangPcs,
-        totalModal: rumahModal + keranjangModal,
-        totalProfit: rumahProfit + keranjangProfit
-      };
+        // Nilai stok rumah eceran (produk khusus eceran)
+        let rumahModal = 0, rumahProfit = 0, rumahPcs = 0;
+        allProdukDocs.forEach(p => {
+          if (p.is_khusus_eceran === true) {
+            const stok = p.stok_rumah_eceran ?? 0;
+            const modal = p.eceran?.modal_pcs ?? 0;
+            const harga = p.eceran?.harga_pcs ?? 0;
+            rumahPcs    += stok;
+            rumahModal  += stok * modal;
+            rumahProfit += stok * (harga - modal);
+          }
+        });
+        // Nilai stok keranjang (semua mitra) — join modal/harga dari produk
+        let keranjangModal = 0, keranjangProfit = 0, keranjangPcs = 0;
+        try {
+          const seSnap = await window._getDocs(window._collection(window._db, 'stok_eceran'));
+          seSnap.forEach(d => {
+            const data = d.data();
+            const stok = data.stok_pcs || 0;
+            if (stok <= 0) return;
+            const v = valMap[data.produk_id] || { modal: 0, harga: 0 };
+            keranjangPcs    += stok;
+            keranjangModal  += stok * v.modal;
+            keranjangProfit += stok * (v.harga - v.modal);
+          });
+        } catch(e) { console.warn('valuasi keranjang error:', e.message); }
+        window._nilaiStokSummary = {
+          rumahModal, rumahProfit, rumahPcs,
+          keranjangModal, keranjangProfit, keranjangPcs,
+          totalModal: rumahModal + keranjangModal,
+          totalProfit: rumahProfit + keranjangProfit
+        };
+      }
+
+      let produkList = allProdukDocs.slice();
 
       if (_masterProdukTab === 'semua') {
         produkList = produkList.filter(p => p.eceran?.aktif === true);
@@ -5743,13 +5803,19 @@
         produkList = produkList.filter(p => (p.eceran?.kategori || 'lain') === _masterProdukKategori);
       }
 
+      // Terapkan filter pencarian (real-time, berdasarkan nama produk)
+      const _q = (_masterProdukSearch || '').trim().toLowerCase();
+      if (_q) produkList = produkList.filter(p => (p.nama || '').toLowerCase().includes(_q));
+
       if (!produkList.length) {
         // Jika ada filter tapi tidak ada hasil, tampilkan pesan
-        const emptyMsg = _masterProdukKategori
-          ? `Tidak ada produk dalam kategori "<strong>${_masterProdukKategori}</strong>".`
-          : 'Tambahkan produk eceran menggunakan tombol di atas.';
+        const emptyMsg = _q
+          ? `Tidak ada produk yang cocok dengan "<strong>${_q}</strong>".`
+          : _masterProdukKategori
+            ? `Tidak ada produk dalam kategori "<strong>${_masterProdukKategori}</strong>".`
+            : 'Tambahkan produk eceran menggunakan tombol di atas.';
         const filterChips = _renderKategoriChips(kategoriList, 'setMasterProdukKategori');
-        cont.innerHTML = `${filterChips}<div class="empty-state"><span class="empty-icon">🏷️</span>
+        cont.innerHTML = `${filterChips}<div class="empty-state"><span class="empty-icon">🔍</span>
           <h3>Tidak ada produk</h3><p>${emptyMsg}</p></div>`;
         return;
       }
