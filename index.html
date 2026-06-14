@@ -1545,6 +1545,21 @@
           <div id="ap-per-produk"><div class="loading-state"><div class="loading-spinner"></div></div></div>
         </div>
 
+        <!-- Section 3B: Produk Terlaris per Mitra -->
+        <div class="card mb-20">
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:6px">
+            <div class="section-title" style="margin:0">🔥 Produk Terlaris per Mitra</div>
+            <select id="ap-mitra-topn" onchange="renderApProdukPerMitra()" style="font-size:12px;padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:var(--white);cursor:pointer">
+              <option value="10">Top 10</option>
+              <option value="5">Top 5</option>
+              <option value="20">Top 20</option>
+              <option value="999">Semua produk</option>
+            </select>
+          </div>
+          <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px">Klik nama mitra untuk lihat ranking produk terlaris (berdasarkan pcs terjual).</div>
+          <div id="ap-produk-per-mitra"><div class="loading-state"><div class="loading-spinner"></div></div></div>
+        </div>
+
         <!-- Section 4: Chart Tren -->
         <div class="card mb-20 no-print">
           <div class="section-title">📊 Tren Profit per Pasaran</div>
@@ -1773,15 +1788,45 @@
 <!-- MODAL: TAMBAH STOK RUMAH ECERAN                              -->
 <!-- ============================================================ -->
 <div class="modal-overlay" id="modal-tambah-stok-rumah-eceran">
-  <div class="modal" style="max-width:400px">
+  <div class="modal" style="max-width:420px">
     <div class="modal-header">
-      <div class="modal-title">📦 Tambah Stok Rumah Eceran</div>
+      <div class="modal-title">📦 Kelola Stok Rumah Eceran</div>
       <button class="modal-close" onclick="closeModal('modal-tambah-stok-rumah-eceran')">✕</button>
     </div>
     <div id="modal-tambah-stok-rumah-body" style="padding:20px 24px"></div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-tambah-stok-rumah-eceran')">Batal</button>
-      <button class="btn btn-primary" id="btn-simpan-stok-rumah" onclick="simpanTambahStokRumahEceran()">💾 Tambah Stok</button>
+      <button class="btn btn-primary" id="btn-simpan-stok-rumah" onclick="simpanKelolaStokRumahEceran()">💾 Simpan</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- MODAL: RIWAYAT STOK RUMAH ECERAN                             -->
+<!-- ============================================================ -->
+<div class="modal-overlay" id="modal-riwayat-stok-rumah">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-header">
+      <div class="modal-title" id="riwayat-stok-rumah-title">📋 Riwayat Stok Rumah</div>
+      <button class="modal-close" onclick="closeModal('modal-riwayat-stok-rumah')">✕</button>
+    </div>
+    <div style="padding:0 4px 8px">
+      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+        <select class="input" id="rsr-filter-jenis" onchange="filterRiwayatStokRumah()" style="flex:1;min-width:140px;padding:7px 10px;font-size:13px;border:1px solid var(--border);border-radius:8px">
+          <option value="">Semua Jenis</option>
+          <option value="tambah">➕ Tambah</option>
+          <option value="kurang">➖ Kurang</option>
+          <option value="edit">✏️ Set Nilai</option>
+          <option value="pindah_keranjang">📦 Pindah ke Keranjang</option>
+        </select>
+      </div>
+      <div id="riwayat-stok-rumah-list" style="max-height:380px;overflow-y:auto"></div>
+      <div id="rsr-load-more" style="display:none;text-align:center;margin-top:8px">
+        <button class="btn btn-secondary btn-sm" onclick="loadMoreRiwayatStokRumah()">Lihat Lebih Banyak</button>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-riwayat-stok-rumah')">Tutup</button>
     </div>
   </div>
 </div>
@@ -3561,13 +3606,17 @@
       return;
     }
 
-    // Load produk kategori map
+    // Load produk kategori + valuasi (modal/harga) map
     const produkSnap = await getDocs(collection(db, 'produk'));
     const produkKatMap = {};
+    const produkValMap = {};
     produkSnap.forEach(d => {
-      produkKatMap[d.id] = d.data().eceran?.kategori || 'lain';
+      const data = d.data();
+      produkKatMap[d.id] = data.eceran?.kategori || 'lain';
+      produkValMap[d.id] = { modal: data.eceran?.modal_pcs ?? 0, harga: data.eceran?.harga_pcs ?? 0 };
     });
     window._produkKatMap = produkKatMap;
+    window._produkValMap = produkValMap;
 
     // Load stok semua mitra + enrich dengan kategori
     const seSnap = await getDocs(collection(db, 'stok_eceran'));
@@ -3614,7 +3663,10 @@
       return;
     }
 
-    container.innerHTML = filteredMitra.map(mitra => {
+    const valMap = window._produkValMap || {};
+    let grandModal = 0, grandProfit = 0, grandPcs = 0;
+
+    const cardsHTML = filteredMitra.map(mitra => {
       let items = stokByMitra[mitra.id] || [];
 
       // Filter by kategori
@@ -3637,9 +3689,14 @@
         </div>`;
       }
 
+      let cardModal = 0, cardProfit = 0, cardPcs = 0;
       const rows = items.map(data => {
         const stok = data.stok_pcs || 0;
         const target = data.stok_target_pcs || 0;
+        const v = valMap[data.produk_id] || { modal: 0, harga: 0 };
+        const nilaiModal = stok * v.modal;
+        const profitPot  = stok * (v.harga - v.modal);
+        cardModal += nilaiModal; cardProfit += profitPot; cardPcs += stok;
         let statusBadge, rowBg;
         if (stok === 0) {
           statusBadge = `<span class="badge badge-red">🔴 Habis</span>`;
@@ -3657,9 +3714,12 @@
           </td>
           <td style="font-weight:700;font-size:15px">${stok}</td>
           <td style="color:var(--text-secondary)">${target || '-'}</td>
+          <td style="font-size:12px">${formatRupiah(nilaiModal)}<br><span style="font-size:11px;color:var(--green-text)">+${formatRupiah(profitPot)}</span></td>
           <td>${statusBadge}</td>
         </tr>`;
       }).join('');
+
+      grandModal += cardModal; grandProfit += cardProfit; grandPcs += cardPcs;
 
       return `
         <div class="card mb-16">
@@ -3673,16 +3733,38 @@
               <button class="btn btn-primary btn-sm" onclick="window._prefillMitra='${mitra.id}';navigateTo('isi-stok')">📦 Isi Stok</button>
             </div>
           </div>
+          <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:12px;margin-bottom:10px;padding:8px 12px;background:var(--bg);border-radius:8px">
+            <span>📦 <strong>${cardPcs}</strong> pcs</span>
+            <span>💎 Nilai modal: <strong>${formatRupiah(cardModal)}</strong></span>
+            <span style="color:var(--green-text)">📈 Profit potensial: <strong>${formatRupiah(cardProfit)}</strong></span>
+          </div>
           <div class="table-wrap">
             <table>
               <thead>
-                <tr><th>Nama Produk</th><th>Stok (pcs)</th><th>Target (pcs)</th><th>Status</th></tr>
+                <tr><th>Nama Produk</th><th>Stok</th><th>Target</th><th>Nilai / Profit</th><th>Status</th></tr>
               </thead>
               <tbody>${rows}</tbody>
             </table>
           </div>
         </div>`;
     }).join('');
+
+    // Banner total keseluruhan keranjang
+    const banner = `
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px">
+        <div style="background:linear-gradient(135deg,#1D9E75,#168a62);color:#fff;border-radius:12px;padding:12px 14px">
+          <div style="font-size:11px;opacity:0.9;font-weight:600">💎 NILAI STOK KERANJANG (MODAL)</div>
+          <div style="font-size:19px;font-weight:800;margin-top:2px">${formatRupiah(grandModal)}</div>
+          <div style="font-size:10.5px;opacity:0.85;margin-top:2px">${grandPcs} pcs total</div>
+        </div>
+        <div style="background:var(--white);border:1px solid var(--border);border-radius:12px;padding:12px 14px">
+          <div style="font-size:11px;color:var(--text-muted);font-weight:600">📈 PROFIT POTENSIAL</div>
+          <div style="font-size:19px;font-weight:800;color:var(--green-text);margin-top:2px">${formatRupiah(grandProfit)}</div>
+          <div style="font-size:10.5px;color:var(--text-muted);margin-top:2px">Jika semua stok keranjang terjual</div>
+        </div>
+      </div>`;
+
+    container.innerHTML = banner + cardsHTML;
   }
 
   let _stokKeranjangKategori = '';
@@ -4026,9 +4108,19 @@
         if (!prodSnap.exists()) throw new Error('Data produk tidak ditemukan');
         const stokRumah = prodSnap.data().stok_rumah_eceran ?? 0;
         if (stokRumah < jumlahPcs) throw new Error(`Stok rumah eceran tidak cukup (tersedia ${stokRumah} pcs)`);
+        const stokRumahSesudah = stokRumah - jumlahPcs;
         batch.update(doc(db, 'produk', produkId), {
-          stok_rumah_eceran: stokRumah - jumlahPcs,
+          stok_rumah_eceran: stokRumahSesudah,
           updated_at: serverTimestamp()
+        });
+        // Log keluar dari stok rumah → pindah ke keranjang mitra
+        _logStokRumah(batch, {
+          produkId, produkNama,
+          jenis: 'pindah_keranjang',
+          delta: -jumlahPcs,
+          stokSebelum: stokRumah,
+          stokSesudah: stokRumahSesudah,
+          keterangan: `Pindah ke keranjang ${isiStokMitraNama}`
         });
       }
 
@@ -5584,7 +5676,47 @@
     cont.innerHTML = '<div class="loading-state"><div class="loading-spinner"></div> Memuat...</div>';
     try {
       const snap = await window._getDocs(window._collection(window._db, 'produk'));
-      let produkList = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const allProdukDocs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      let produkList = allProdukDocs.slice();
+
+      // ---- Hitung nilai stok keseluruhan (rumah + keranjang) ----
+      // Peta modal & harga per produk untuk valuasi keranjang
+      const valMap = {};
+      allProdukDocs.forEach(p => {
+        valMap[p.id] = { modal: p.eceran?.modal_pcs ?? 0, harga: p.eceran?.harga_pcs ?? 0 };
+      });
+      // Nilai stok rumah eceran (produk khusus eceran)
+      let rumahModal = 0, rumahProfit = 0, rumahPcs = 0;
+      allProdukDocs.forEach(p => {
+        if (p.is_khusus_eceran === true) {
+          const stok = p.stok_rumah_eceran ?? 0;
+          const modal = p.eceran?.modal_pcs ?? 0;
+          const harga = p.eceran?.harga_pcs ?? 0;
+          rumahPcs    += stok;
+          rumahModal  += stok * modal;
+          rumahProfit += stok * (harga - modal);
+        }
+      });
+      // Nilai stok keranjang (semua mitra) — join modal/harga dari produk
+      let keranjangModal = 0, keranjangProfit = 0, keranjangPcs = 0;
+      try {
+        const seSnap = await window._getDocs(window._collection(window._db, 'stok_eceran'));
+        seSnap.forEach(d => {
+          const data = d.data();
+          const stok = data.stok_pcs || 0;
+          if (stok <= 0) return;
+          const v = valMap[data.produk_id] || { modal: 0, harga: 0 };
+          keranjangPcs    += stok;
+          keranjangModal  += stok * v.modal;
+          keranjangProfit += stok * (v.harga - v.modal);
+        });
+      } catch(e) { console.warn('valuasi keranjang error:', e.message); }
+      window._nilaiStokSummary = {
+        rumahModal, rumahProfit, rumahPcs,
+        keranjangModal, keranjangProfit, keranjangPcs,
+        totalModal: rumahModal + keranjangModal,
+        totalProfit: rumahProfit + keranjangProfit
+      };
 
       if (_masterProdukTab === 'semua') {
         produkList = produkList.filter(p => p.eceran?.aktif === true);
@@ -5677,9 +5809,13 @@
           ${marginCell}
           ${!isGrosirTab ? `<td>
             ${isKhusus
-              ? `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-                   <span style="font-weight:700;font-size:13px">${stokRumah} pcs</span>
-                   <button class="btn btn-secondary btn-sm" onclick="openTambahStokRumahEceran('${p.id}','${namaSafe}',${stokRumah})">➕ Tambah</button>
+              ? `<div style="display:flex;flex-direction:column;gap:4px">
+                   <span style="font-weight:700;font-size:14px">${stokRumah} pcs</span>
+                   <span style="font-size:11px;color:var(--text-muted)">Nilai: ${formatRupiah(stokRumah * modal)} · Profit: ${formatRupiah(stokRumah * marginRp)}</span>
+                   <div style="display:flex;gap:4px;flex-wrap:wrap">
+                     <button class="btn btn-secondary btn-sm" style="padding:4px 9px" onclick="openTambahStokRumahEceran('${p.id}','${namaSafe}',${stokRumah})">📦 Kelola</button>
+                     <button class="btn btn-secondary btn-sm" style="padding:4px 9px" onclick="openRiwayatStokRumah('${p.id}','${namaSafe}')">📋 Riwayat</button>
+                   </div>
                  </div>`
               : '<span style="color:var(--text-muted);font-size:12px">—</span>'}
           </td>` : ''}
@@ -5698,7 +5834,34 @@
 
       const filterChipsMaster = _renderKategoriChips(kategoriList, 'setMasterProdukKategori');
 
+      // Banner ringkasan nilai stok keseluruhan (rumah + keranjang)
+      const s = window._nilaiStokSummary || {};
+      const nilaiBanner = `
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px">
+          <div style="background:linear-gradient(135deg,#1D9E75,#168a62);color:#fff;border-radius:12px;padding:12px 14px">
+            <div style="font-size:11px;opacity:0.9;font-weight:600">💎 TOTAL NILAI STOK (MODAL)</div>
+            <div style="font-size:19px;font-weight:800;margin-top:2px">${formatRupiah(s.totalModal || 0)}</div>
+            <div style="font-size:10.5px;opacity:0.85;margin-top:2px">Rumah + Keranjang</div>
+          </div>
+          <div style="background:var(--white);border:1px solid var(--border);border-radius:12px;padding:12px 14px">
+            <div style="font-size:11px;color:var(--text-muted);font-weight:600">📈 PROFIT POTENSIAL</div>
+            <div style="font-size:19px;font-weight:800;color:var(--green-text);margin-top:2px">${formatRupiah(s.totalProfit || 0)}</div>
+            <div style="font-size:10.5px;color:var(--text-muted);margin-top:2px">Jika semua stok terjual</div>
+          </div>
+          <div style="background:var(--white);border:1px solid var(--border);border-radius:12px;padding:12px 14px">
+            <div style="font-size:11px;color:var(--text-muted);font-weight:600">🏠 STOK RUMAH</div>
+            <div style="font-size:16px;font-weight:800;margin-top:2px">${formatRupiah(s.rumahModal || 0)}</div>
+            <div style="font-size:10.5px;color:var(--text-muted);margin-top:2px">${s.rumahPcs || 0} pcs · profit ${formatRupiah(s.rumahProfit || 0)}</div>
+          </div>
+          <div style="background:var(--white);border:1px solid var(--border);border-radius:12px;padding:12px 14px">
+            <div style="font-size:11px;color:var(--text-muted);font-weight:600">🛒 STOK KERANJANG</div>
+            <div style="font-size:16px;font-weight:800;margin-top:2px">${formatRupiah(s.keranjangModal || 0)}</div>
+            <div style="font-size:10.5px;color:var(--text-muted);margin-top:2px">${s.keranjangPcs || 0} pcs · profit ${formatRupiah(s.keranjangProfit || 0)}</div>
+          </div>
+        </div>`;
+
       cont.innerHTML = `
+        ${nilaiBanner}
         ${filterChipsMaster}
         <div class="table-wrap">
           <table>
@@ -5822,6 +5985,7 @@
     const kategori = document.getElementById('p-kategori')?.value || 'lain';
     if (harga <= 0) { showToast('Harga harus lebih dari 0', 'error'); return; }
     btn.disabled = true; btn.textContent = 'Menyimpan...';
+    let _pendingStokRumahLog = null; // { id, nama, jumlah } stok awal untuk dicatat ke riwayat
     try {
       if (_editProdukId) {
         // Update
@@ -5848,6 +6012,7 @@
             const stokAwal = parseInt(document.getElementById('p-stok-rumah-awal')?.value) || 0;
             updatePayload.is_khusus_eceran = true;
             updatePayload.stok_rumah_eceran = stokAwal;
+            if (stokAwal > 0) _pendingStokRumahLog = { id: _editProdukId, nama: _editProdukData?.nama || '-', jumlah: stokAwal };
           } else if (!isKhususChecked && wasKhusus) {
             // Dinonaktifkan
             updatePayload.is_khusus_eceran = false;
@@ -5871,8 +6036,26 @@
           produkDoc.is_khusus_eceran = true;
           produkDoc.stok_rumah_eceran = stokRumahAwal;
         }
-        await window._addDoc(window._collection(window._db, 'produk'), produkDoc);
+        const newRef = await window._addDoc(window._collection(window._db, 'produk'), produkDoc);
+        if (isKhusus && stokRumahAwal > 0) _pendingStokRumahLog = { id: newRef.id, nama, jumlah: stokRumahAwal };
       }
+
+      // Catat stok awal ke riwayat stok rumah (jika ada)
+      if (_pendingStokRumahLog) {
+        await window._addDoc(window._collection(window._db, 'stok_rumah_log'), {
+          produk_id: _pendingStokRumahLog.id,
+          produk_nama: _pendingStokRumahLog.nama,
+          jenis: 'tambah',
+          jumlah_pcs: _pendingStokRumahLog.jumlah,
+          stok_sebelum: 0,
+          stok_sesudah: _pendingStokRumahLog.jumlah,
+          keterangan: 'Stok awal produk',
+          dicatat_oleh_uid: currentUser.uid,
+          dicatat_oleh_nama: currentUserData?.nama || currentUser.email,
+          created_at: serverTimestamp()
+        });
+      }
+
       closeModal('modal-produk-eceran');
       showToast('Produk berhasil disimpan');
       loadMasterProduk();
@@ -5901,39 +6084,211 @@
   ============================================================ */
   let _tambahStokRumahProdukId = null;
 
+  let _kelolaStokRumahNama = '';
+  let _kelolaStokRumahStok = 0;
+  let _kelolaStokRumahMode = 'tambah';
+
+  // Tulis log pergerakan stok rumah eceran ke dalam sebuah batch
+  function _logStokRumah(batch, { produkId, produkNama, jenis, delta, stokSebelum, stokSesudah, keterangan }) {
+    const ref = doc(collection(db, 'stok_rumah_log'));
+    batch.set(ref, {
+      produk_id: produkId,
+      produk_nama: produkNama,
+      jenis,                      // 'tambah' | 'kurang' | 'edit' | 'pindah_keranjang'
+      jumlah_pcs: delta,          // bertanda: + masuk, - keluar
+      stok_sebelum: stokSebelum,
+      stok_sesudah: stokSesudah,
+      keterangan: keterangan || '',
+      dicatat_oleh_uid: currentUser.uid,
+      dicatat_oleh_nama: currentUserData?.nama || currentUser.email,
+      created_at: serverTimestamp()
+    });
+  }
+
   window.openTambahStokRumahEceran = function(id, nama, stokSekarang) {
     _tambahStokRumahProdukId = id;
+    _kelolaStokRumahNama = nama;
+    _kelolaStokRumahStok = stokSekarang;
+    _kelolaStokRumahMode = 'tambah';
     document.getElementById('modal-tambah-stok-rumah-body').innerHTML = `
       <div class="info-box info-box-blue mb-16">
         <strong>${nama}</strong><br>
-        <span style="font-size:13px">Stok Rumah Eceran saat ini: <strong>${stokSekarang} pcs</strong></span>
+        <span style="font-size:13px">Stok Rumah Eceran saat ini: <strong id="kelola-stok-now">${stokSekarang}</strong> pcs</span>
       </div>
       <div class="form-group">
-        <label>Tambah Stok (pcs)</label>
-        <input type="number" class="input" id="tambah-stok-rumah-jumlah" min="1" placeholder="0" />
+        <label>Jenis Operasi</label>
+        <div style="display:flex;gap:6px;flex-wrap:wrap" id="kelola-stok-mode-btns">
+          <button type="button" class="btn btn-primary btn-sm" data-mode="tambah" onclick="setKelolaStokMode('tambah',this)">➕ Tambah</button>
+          <button type="button" class="btn btn-secondary btn-sm" data-mode="kurang" onclick="setKelolaStokMode('kurang',this)">➖ Kurang</button>
+          <button type="button" class="btn btn-secondary btn-sm" data-mode="edit" onclick="setKelolaStokMode('edit',this)">✏️ Set Nilai</button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label id="kelola-stok-label">Tambah Stok (pcs)</label>
+        <input type="number" class="input" id="tambah-stok-rumah-jumlah" min="0" placeholder="0" oninput="previewKelolaStok()" />
+        <div id="kelola-stok-preview" style="font-size:12px;color:var(--text-muted);margin-top:4px"></div>
+      </div>
+      <div class="form-group">
+        <label>Keterangan (opsional)</label>
+        <input type="text" class="input" id="kelola-stok-ket" placeholder="cth: produksi baru / rusak / koreksi" />
       </div>`;
     openModal('modal-tambah-stok-rumah-eceran');
   };
 
-  window.simpanTambahStokRumahEceran = async function() {
+  window.setKelolaStokMode = function(mode, btn) {
+    _kelolaStokRumahMode = mode;
+    document.querySelectorAll('#kelola-stok-mode-btns button').forEach(b => {
+      b.className = 'btn btn-sm ' + (b === btn ? 'btn-primary' : 'btn-secondary');
+    });
+    const label = document.getElementById('kelola-stok-label');
+    label.textContent = mode === 'tambah' ? 'Tambah Stok (pcs)'
+                      : mode === 'kurang' ? 'Kurangi Stok (pcs)'
+                      : 'Set Stok Menjadi (pcs)';
+    previewKelolaStok();
+  };
+
+  window.previewKelolaStok = function() {
+    const val = parseInt(document.getElementById('tambah-stok-rumah-jumlah')?.value) || 0;
+    const now = _kelolaStokRumahStok;
+    let after;
+    if (_kelolaStokRumahMode === 'tambah') after = now + val;
+    else if (_kelolaStokRumahMode === 'kurang') after = now - val;
+    else after = val;
+    const el = document.getElementById('kelola-stok-preview');
+    if (!el) return;
+    if (after < 0) { el.innerHTML = `<span style="color:var(--red-text)">⚠️ Stok tidak boleh minus (hasil: ${after})</span>`; }
+    else { el.innerHTML = `Stok setelah: <strong>${after} pcs</strong>`; }
+  };
+
+  window.simpanKelolaStokRumahEceran = async function() {
     if (!_tambahStokRumahProdukId) return;
     const btn = document.getElementById('btn-simpan-stok-rumah');
-    const jumlah = parseInt(document.getElementById('tambah-stok-rumah-jumlah')?.value) || 0;
-    if (jumlah <= 0) { showToast('Jumlah harus lebih dari 0', 'error'); return; }
+    const val = parseInt(document.getElementById('tambah-stok-rumah-jumlah')?.value) || 0;
+    const ket = document.getElementById('kelola-stok-ket')?.value?.trim() || '';
+    const mode = _kelolaStokRumahMode;
+    if (mode !== 'edit' && val <= 0) { showToast('Jumlah harus lebih dari 0', 'error'); return; }
+
+    const stokSebelum = _kelolaStokRumahStok;
+    let stokSesudah, delta;
+    if (mode === 'tambah')      { stokSesudah = stokSebelum + val; delta = val; }
+    else if (mode === 'kurang') { stokSesudah = stokSebelum - val; delta = -val; }
+    else                        { stokSesudah = val;               delta = val - stokSebelum; }
+
+    if (stokSesudah < 0) { showToast('Stok tidak boleh minus', 'error'); return; }
+
     btn.disabled = true; btn.textContent = '⏳ Menyimpan...';
     try {
-      await window._updateDoc(window._doc(window._db, 'produk', _tambahStokRumahProdukId), {
-        stok_rumah_eceran: increment(jumlah),
+      const batch = writeBatch(db);
+      batch.update(doc(db, 'produk', _tambahStokRumahProdukId), {
+        stok_rumah_eceran: stokSesudah,
         updated_at: serverTimestamp()
       });
+      _logStokRumah(batch, {
+        produkId: _tambahStokRumahProdukId,
+        produkNama: _kelolaStokRumahNama,
+        jenis: mode,
+        delta,
+        stokSebelum,
+        stokSesudah,
+        keterangan: ket
+      });
+      await batch.commit();
       closeModal('modal-tambah-stok-rumah-eceran');
-      showToast(`Berhasil tambah ${jumlah} pcs ke stok rumah eceran!`, 'success');
+      const verb = mode === 'tambah' ? `tambah ${val}` : mode === 'kurang' ? `kurang ${val}` : `set jadi ${stokSesudah}`;
+      showToast(`Stok rumah ${_kelolaStokRumahNama} ${verb} pcs ✓`, 'success');
       loadMasterProduk();
     } catch(e) {
       showToast('Error: ' + e.message, 'error');
     } finally {
-      btn.disabled = false; btn.textContent = '💾 Tambah Stok';
+      btn.disabled = false; btn.textContent = '💾 Simpan';
     }
+  };
+
+  /* ==========================================================
+     RIWAYAT STOK RUMAH ECERAN (stok_rumah_log)
+  ========================================================== */
+  let _rsrProdukId = null;
+  let _rsrAllLogs  = [];
+  let _rsrLimit    = 30;
+
+  window.openRiwayatStokRumah = async function(produkId, produkNama) {
+    _rsrProdukId = produkId;
+    _rsrLimit = 30;
+    document.getElementById('riwayat-stok-rumah-title').textContent = `📋 Riwayat Stok Rumah — ${produkNama}`;
+    document.getElementById('rsr-filter-jenis').value = '';
+    document.getElementById('riwayat-stok-rumah-list').innerHTML =
+      `<div class="loading-state"><div class="loading-spinner"></div> Memuat riwayat...</div>`;
+    openModal('modal-riwayat-stok-rumah');
+    await _fetchRiwayatStokRumah();
+  };
+
+  async function _fetchRiwayatStokRumah() {
+    const listEl = document.getElementById('riwayat-stok-rumah-list');
+    try {
+      const snap = await getDocs(query(
+        collection(db, 'stok_rumah_log'),
+        where('produk_id', '==', _rsrProdukId),
+        orderBy('created_at', 'desc'),
+        limit(_rsrLimit)
+      ));
+      _rsrAllLogs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      document.getElementById('rsr-load-more').style.display = _rsrAllLogs.length >= _rsrLimit ? 'block' : 'none';
+      _renderRiwayatStokRumah(listEl);
+    } catch(e) {
+      listEl.innerHTML = `<div style="color:var(--red-text);padding:16px">⚠️ Gagal memuat: ${e.message}</div>`;
+    }
+  }
+
+  function _renderRiwayatStokRumah(listEl) {
+    const filterJenis = document.getElementById('rsr-filter-jenis')?.value || '';
+    let logs = _rsrAllLogs;
+    if (filterJenis) logs = logs.filter(l => l.jenis === filterJenis);
+
+    if (!logs.length) {
+      listEl.innerHTML = `<div class="empty-state" style="padding:32px;text-align:center">
+        <div style="font-size:32px;margin-bottom:8px">📋</div>
+        <p style="color:var(--text-muted)">Belum ada riwayat pergerakan stok rumah</p></div>`;
+      return;
+    }
+
+    const cfgMap = {
+      tambah:           { icon:'➕', label:'Tambah',           color:'#16A34A', bg:'#F0FDF4' },
+      kurang:           { icon:'➖', label:'Kurang',           color:'#DC2626', bg:'#FFF5F5' },
+      edit:             { icon:'✏️', label:'Set Nilai',        color:'#2563EB', bg:'#EFF6FF' },
+      pindah_keranjang: { icon:'📦', label:'Pindah Keranjang', color:'#D97706', bg:'#FFFBEB' }
+    };
+
+    listEl.innerHTML = logs.map(log => {
+      const cfg = cfgMap[log.jenis] || { icon:'📌', label:log.jenis, color:'var(--text-primary)', bg:'transparent' };
+      const tgl = log.created_at?.toDate ? log.created_at.toDate() : new Date();
+      const tglStr = tgl.toLocaleDateString('id-ID', { day:'2-digit', month:'short', year:'numeric' });
+      const jamStr = tgl.toLocaleTimeString('id-ID', { hour:'2-digit', minute:'2-digit' });
+      const plus = (log.jumlah_pcs || 0) > 0;
+      const deltaStr = log.jenis === 'edit'
+        ? `→ ${log.stok_sesudah} pcs`
+        : `${plus ? '+' : ''}${log.jumlah_pcs} pcs`;
+      return `
+        <div style="display:flex;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">
+          <div style="width:36px;height:36px;border-radius:8px;background:${cfg.bg};display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">${cfg.icon}</div>
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px">
+              <span style="font-size:11px;font-weight:600;padding:2px 7px;border-radius:99px;background:${cfg.bg};color:${cfg.color}">${cfg.label}</span>
+              <div style="font-weight:800;font-size:15px;color:${cfg.color};white-space:nowrap">${deltaStr}</div>
+            </div>
+            <div style="font-size:11.5px;color:var(--text-secondary);margin-top:3px">${log.stok_sebelum ?? '?'} → ${log.stok_sesudah ?? '?'} pcs${log.keterangan ? ` · ${log.keterangan}` : ''}</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:2px">${tglStr} · ${jamStr} · ${log.dicatat_oleh_nama || '-'}</div>
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  window.filterRiwayatStokRumah = function() {
+    _renderRiwayatStokRumah(document.getElementById('riwayat-stok-rumah-list'));
+  };
+
+  window.loadMoreRiwayatStokRumah = async function() {
+    _rsrLimit += 30;
+    await _fetchRiwayatStokRumah();
   };
 
   /* ==========================================================
@@ -6314,6 +6669,7 @@
       renderApRingkasan();
       renderApPerMitra();
       renderApPerProduk();
+      renderApProdukPerMitra();
       renderApTren();
       renderApDetail();
     } catch(e) {
@@ -6398,6 +6754,94 @@
   window.toggleProdukView = function() {
     _apProdukShowAll = !_apProdukShowAll;
     renderApPerProduk();
+  };
+
+  // ---- PRODUK TERLARIS PER MITRA ----
+  let _apExpandedMitra = {}; // mitra_id → bool (terbuka/tidak)
+
+  window.renderApProdukPerMitra = function() {
+    const cont = document.getElementById('ap-produk-per-mitra');
+    if (!cont) return;
+    const topN = parseInt(document.getElementById('ap-mitra-topn')?.value) || 10;
+
+    // Kelompokkan: mitra → produk → akumulasi
+    const byMitra = {};
+    _apAllTrx.forEach(t => {
+      const mid = t.mitra_id || 'unknown';
+      if (!byMitra[mid]) byMitra[mid] = { nama: t.mitra_nama || '-', totalPcs: 0, totalOmzet: 0, produk: {} };
+      const g = byMitra[mid];
+      (t.items || []).forEach(i => {
+        const pid = i.produk_id || i.produk_nama;
+        if (!g.produk[pid]) g.produk[pid] = { nama: i.produk_nama, pcs: 0, omzet: 0, profit: 0 };
+        const p = g.produk[pid];
+        const pcs = i.jumlah_pcs || 0;
+        p.pcs    += pcs;
+        p.omzet  += i.subtotal || 0;
+        p.profit += i.profit_subtotal || 0;
+        g.totalPcs   += pcs;
+        g.totalOmzet += i.subtotal || 0;
+      });
+    });
+
+    const mitraArr = Object.entries(byMitra)
+      .map(([id, g]) => ({ id, ...g }))
+      .sort((a, b) => b.totalPcs - a.totalPcs);
+
+    if (!mitraArr.length) {
+      cont.innerHTML = '<div class="empty-state" style="padding:24px;text-align:center"><p style="color:var(--text-muted)">Tidak ada data penjualan pada periode ini</p></div>';
+      return;
+    }
+
+    const medal = (idx) => idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `<span style="color:var(--text-muted)">${idx + 1}.</span>`;
+
+    cont.innerHTML = mitraArr.map(m => {
+      const produkSorted = Object.values(m.produk).sort((a, b) => b.pcs - a.pcs);
+      const totalJenis = produkSorted.length;
+      const display = produkSorted.slice(0, topN);
+      const isOpen = _apExpandedMitra[m.id] !== false; // default terbuka
+
+      const rows = display.map((p, idx) => `
+        <tr ${idx === 0 ? 'style="background:#f0fdf4"' : ''}>
+          <td style="text-align:center;width:36px">${medal(idx)}</td>
+          <td style="font-weight:600">${p.nama}</td>
+          <td style="text-align:right;font-weight:700">${p.pcs} pcs</td>
+          <td style="text-align:right">${formatRupiah(p.omzet)}</td>
+          <td style="text-align:right;color:var(--green-text)">${formatRupiah(p.profit)}</td>
+        </tr>`).join('');
+
+      return `
+        <div style="border:1px solid var(--border);border-radius:12px;margin-bottom:12px;overflow:hidden">
+          <div onclick="toggleApMitraProduk('${m.id}')" style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:12px 14px;cursor:pointer;background:var(--bg);flex-wrap:wrap">
+            <div style="display:flex;align-items:center;gap:8px">
+              <span id="ap-mp-arrow-${m.id}">${isOpen ? '▴' : '▾'}</span>
+              <strong style="font-size:15px">${m.nama}</strong>
+              <span class="badge badge-gray">${totalJenis} jenis</span>
+            </div>
+            <div style="font-size:12px;color:var(--text-secondary)">
+              📦 <strong>${m.totalPcs}</strong> pcs · 💰 ${formatRupiah(m.totalOmzet)}
+            </div>
+          </div>
+          <div id="ap-mp-body-${m.id}" style="display:${isOpen ? 'block' : 'none'}">
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th style="text-align:center">#</th><th>Produk</th><th style="text-align:right">Terjual</th><th style="text-align:right">Omzet</th><th style="text-align:right">Profit</th></tr></thead>
+                <tbody>${rows}</tbody>
+              </table>
+            </div>
+            ${totalJenis > display.length ? `<div style="padding:8px 14px;font-size:12px;color:var(--text-muted)">Menampilkan ${display.length} dari ${totalJenis} produk. Ubah filter di atas untuk lihat lebih banyak.</div>` : ''}
+          </div>
+        </div>`;
+    }).join('');
+  };
+
+  window.toggleApMitraProduk = function(mitraId) {
+    const body = document.getElementById(`ap-mp-body-${mitraId}`);
+    const arrow = document.getElementById(`ap-mp-arrow-${mitraId}`);
+    if (!body) return;
+    const open = body.style.display !== 'none';
+    body.style.display = open ? 'none' : 'block';
+    _apExpandedMitra[mitraId] = !open;
+    if (arrow) arrow.textContent = open ? '▾' : '▴';
   };
 
   function renderApTren() {
