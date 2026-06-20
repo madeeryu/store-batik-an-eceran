@@ -1846,6 +1846,40 @@
 </div>
 
 <!-- ============================================================ -->
+<!-- MODAL: KOREKSI STOK KERANJANG                                -->
+<!-- ============================================================ -->
+<div class="modal-overlay" id="modal-koreksi-stok-keranjang">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-header">
+      <div class="modal-title">✏️ Koreksi Stok Keranjang</div>
+      <button class="modal-close" onclick="closeModal('modal-koreksi-stok-keranjang')">✕</button>
+    </div>
+    <div id="modal-koreksi-stok-body" style="padding:20px 24px"></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-koreksi-stok-keranjang')">Batal</button>
+      <button class="btn btn-primary" id="btn-simpan-koreksi-stok" onclick="simpanKoreksiStokKeranjang()">💾 Simpan Koreksi</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- MODAL: HAPUS PRODUK DARI KERANJANG                           -->
+<!-- ============================================================ -->
+<div class="modal-overlay" id="modal-hapus-stok-keranjang">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-header">
+      <div class="modal-title">🗑️ Hapus Produk dari Keranjang</div>
+      <button class="modal-close" onclick="closeModal('modal-hapus-stok-keranjang')">✕</button>
+    </div>
+    <div id="modal-hapus-stok-body" style="padding:20px 24px"></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-hapus-stok-keranjang')">Batal</button>
+      <button class="btn btn-danger" id="btn-konfirmasi-hapus-stok" onclick="konfirmasiHapusStokKeranjang()">🗑️ Ya, Hapus</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
 <!-- MODAL: RIWAYAT STOK MITRA                                     -->
 <div class="modal-overlay" id="modal-riwayat-stok-mitra">
   <div class="modal" style="max-width:540px">
@@ -1860,6 +1894,8 @@
           <option value="tambah">📦 Ditambah</option>
           <option value="terjual">🛒 Terjual</option>
           <option value="retur">↩️ Retur</option>
+          <option value="koreksi">✏️ Koreksi</option>
+          <option value="hapus">🗑️ Dihapus</option>
         </select>
         <select class="input" id="rsm-filter-produk" onchange="filterRiwayatStokMitra()" style="flex:2;min-width:140px;padding:7px 10px;font-size:13px;border:1px solid var(--border);border-radius:8px">
           <option value="">Semua Produk</option>
@@ -3734,6 +3770,8 @@
           statusBadge = `<span class="badge badge-green">🟢 Cukup</span>`;
           rowBg = '';
         }
+        const nmSafe = (data.produk_nama || '').replace(/'/g,"\\'").replace(/"/g,'&quot;');
+        const mnSafe = (mitra.nama || '').replace(/'/g,"\\'").replace(/"/g,'&quot;');
         return `<tr style="${rowBg}">
           <td style="font-weight:600">${data.produk_nama}
             ${data._kategori ? `<br><span style="font-size:11px;color:var(--text-muted)">${data._kategori}</span>` : ''}
@@ -3742,6 +3780,10 @@
           <td style="color:var(--text-secondary)">${target || '-'}</td>
           <td style="font-size:12px">${formatRupiah(nilaiModal)}<br><span style="font-size:11px;color:var(--green-text)">+${formatRupiah(profitPot)}</span></td>
           <td>${statusBadge}</td>
+          <td style="white-space:nowrap">
+            <button class="btn btn-secondary btn-sm" style="padding:4px 8px" title="Koreksi stok" onclick="openKoreksiStokKeranjang('${mitra.id}','${mnSafe}','${data.produk_id}','${nmSafe}',${stok})">✏️</button>
+            <button class="btn btn-danger btn-sm" style="padding:4px 8px" title="Hapus produk dari keranjang" onclick="openHapusStokKeranjang('${mitra.id}','${mnSafe}','${data.produk_id}','${nmSafe}',${stok})">🗑️</button>
+          </td>
         </tr>`;
       }).join('');
 
@@ -3767,7 +3809,7 @@
           <div class="table-wrap">
             <table>
               <thead>
-                <tr><th>Nama Produk</th><th>Stok</th><th>Target</th><th>Nilai / Profit</th><th>Status</th></tr>
+                <tr><th>Nama Produk</th><th>Stok</th><th>Target</th><th>Nilai / Profit</th><th>Status</th><th>Aksi</th></tr>
               </thead>
               <tbody>${rows}</tbody>
             </table>
@@ -5615,7 +5657,9 @@
     const jenisConfig = {
       tambah:  { icon: '📦', label: 'Ditambah',  color: '#16A34A', bg: '#F0FDF4' },
       terjual: { icon: '🛒', label: 'Terjual',   color: '#DC2626', bg: '#FFF5F5' },
-      retur:   { icon: '↩️', label: 'Retur',     color: '#D97706', bg: '#FFFBEB' }
+      retur:   { icon: '↩️', label: 'Retur',     color: '#D97706', bg: '#FFFBEB' },
+      koreksi: { icon: '✏️', label: 'Koreksi',   color: '#2563EB', bg: '#EFF6FF' },
+      hapus:   { icon: '🗑️', label: 'Dihapus',   color: '#DC2626', bg: '#FFF5F5' }
     };
 
     listEl.innerHTML = logs.map(log => {
@@ -5650,6 +5694,132 @@
   window.loadMoreRiwayatStokMitra = async function() {
     _rsmLimit += 30;
     await _fetchRiwayatStokMitra();
+  };
+
+  /* ==========================================================
+     KOREKSI & HAPUS STOK KERANJANG (+ catat riwayat)
+  ========================================================== */
+  let _koreksiStok = null; // { mitraId, mitraNama, produkId, produkNama, stokSekarang }
+  let _hapusStok   = null;
+
+  // Tulis log pergerakan stok keranjang ke dalam batch
+  function _logStokKeranjang(batch, { mitraId, mitraNama, produkId, produkNama, jenis, deltaPcs, keterangan }) {
+    const ref = doc(collection(db, 'stok_eceran_log'));
+    batch.set(ref, {
+      mitra_id: mitraId, mitra_nama: mitraNama,
+      produk_id: produkId, produk_nama: produkNama,
+      jenis,                 // 'koreksi' | 'hapus'
+      jumlah_pcs: deltaPcs,  // bertanda
+      keterangan: keterangan || '',
+      dicatat_oleh_uid: currentUser.uid,
+      dicatat_oleh_nama: currentUserData?.nama || currentUser.email,
+      created_at: serverTimestamp()
+    });
+  }
+
+  window.openKoreksiStokKeranjang = function(mitraId, mitraNama, produkId, produkNama, stokSekarang) {
+    _koreksiStok = { mitraId, mitraNama, produkId, produkNama, stokSekarang };
+    document.getElementById('modal-koreksi-stok-body').innerHTML = `
+      <div class="info-box info-box-blue mb-16">
+        <strong>${produkNama}</strong><br>
+        <span style="font-size:13px">Mitra: ${mitraNama} · Stok saat ini: <strong>${stokSekarang} pcs</strong></span>
+      </div>
+      <div class="form-group">
+        <label>Stok Seharusnya (pcs)</label>
+        <input type="number" class="input" id="koreksi-stok-nilai" min="0" value="${stokSekarang}" oninput="previewKoreksiStok()" />
+        <div id="koreksi-stok-preview" style="font-size:12px;color:var(--text-muted);margin-top:4px"></div>
+      </div>
+      <div class="form-group">
+        <label>Keterangan (alasan koreksi)</label>
+        <input type="text" class="input" id="koreksi-stok-ket" placeholder="cth: salah input / lupa input / hitung ulang" />
+      </div>`;
+    openModal('modal-koreksi-stok-keranjang');
+  };
+
+  window.previewKoreksiStok = function() {
+    if (!_koreksiStok) return;
+    const baru = parseInt(document.getElementById('koreksi-stok-nilai')?.value) || 0;
+    const delta = baru - _koreksiStok.stokSekarang;
+    const el = document.getElementById('koreksi-stok-preview');
+    if (!el) return;
+    if (baru < 0) { el.innerHTML = `<span style="color:var(--red-text)">⚠️ Stok tidak boleh minus</span>`; return; }
+    el.innerHTML = delta === 0 ? 'Tidak ada perubahan'
+      : `Perubahan: <strong style="color:${delta>0?'var(--green-text)':'var(--red-text)'}">${delta>0?'+':''}${delta} pcs</strong>`;
+  };
+
+  window.simpanKoreksiStokKeranjang = async function() {
+    if (!_koreksiStok) return;
+    const btn = document.getElementById('btn-simpan-koreksi-stok');
+    const baru = parseInt(document.getElementById('koreksi-stok-nilai')?.value);
+    const ket = document.getElementById('koreksi-stok-ket')?.value?.trim() || '';
+    if (isNaN(baru) || baru < 0) { showToast('Nilai stok tidak valid', 'error'); return; }
+    const delta = baru - _koreksiStok.stokSekarang;
+    if (delta === 0) { showToast('Tidak ada perubahan stok', 'info'); return; }
+
+    btn.disabled = true; btn.textContent = '⏳ Menyimpan...';
+    try {
+      const batch = writeBatch(db);
+      batch.set(doc(db, 'stok_eceran', `${_koreksiStok.mitraId}_${_koreksiStok.produkId}`), {
+        mitra_id: _koreksiStok.mitraId,
+        produk_id: _koreksiStok.produkId,
+        produk_nama: _koreksiStok.produkNama,
+        stok_pcs: baru,
+        updated_at: serverTimestamp()
+      }, { merge: true });
+      _logStokKeranjang(batch, {
+        mitraId: _koreksiStok.mitraId, mitraNama: _koreksiStok.mitraNama,
+        produkId: _koreksiStok.produkId, produkNama: _koreksiStok.produkNama,
+        jenis: 'koreksi', deltaPcs: delta,
+        keterangan: ket || `Koreksi stok (${_koreksiStok.stokSekarang} → ${baru})`
+      });
+      await batch.commit();
+      closeModal('modal-koreksi-stok-keranjang');
+      showToast(`Stok ${_koreksiStok.produkNama} dikoreksi → ${baru} pcs ✓`, 'success');
+      loadStokKeranjang();
+    } catch(e) {
+      showToast('Gagal koreksi: ' + e.message, 'error');
+    } finally {
+      btn.disabled = false; btn.textContent = '💾 Simpan Koreksi';
+    }
+  };
+
+  window.openHapusStokKeranjang = function(mitraId, mitraNama, produkId, produkNama, stokSekarang) {
+    _hapusStok = { mitraId, mitraNama, produkId, produkNama, stokSekarang };
+    document.getElementById('modal-hapus-stok-body').innerHTML = `
+      <div class="info-box info-box-amber mb-16" style="font-size:13px">
+        ⚠️ Produk <strong>${produkNama}</strong> akan dihapus dari keranjang <strong>${mitraNama}</strong>
+        (stok sekarang ${stokSekarang} pcs). Tindakan ini tercatat di riwayat.
+      </div>
+      <div class="form-group">
+        <label>Keterangan (alasan hapus)</label>
+        <input type="text" class="input" id="hapus-stok-ket" placeholder="cth: salah input produk / produk tidak dibawa" />
+      </div>`;
+    openModal('modal-hapus-stok-keranjang');
+  };
+
+  window.konfirmasiHapusStokKeranjang = async function() {
+    if (!_hapusStok) return;
+    const btn = document.getElementById('btn-konfirmasi-hapus-stok');
+    const ket = document.getElementById('hapus-stok-ket')?.value?.trim() || '';
+    btn.disabled = true; btn.textContent = '⏳ Menghapus...';
+    try {
+      const batch = writeBatch(db);
+      batch.delete(doc(db, 'stok_eceran', `${_hapusStok.mitraId}_${_hapusStok.produkId}`));
+      _logStokKeranjang(batch, {
+        mitraId: _hapusStok.mitraId, mitraNama: _hapusStok.mitraNama,
+        produkId: _hapusStok.produkId, produkNama: _hapusStok.produkNama,
+        jenis: 'hapus', deltaPcs: -(_hapusStok.stokSekarang || 0),
+        keterangan: ket || 'Produk dihapus dari keranjang'
+      });
+      await batch.commit();
+      closeModal('modal-hapus-stok-keranjang');
+      showToast(`${_hapusStok.produkNama} dihapus dari keranjang ${_hapusStok.mitraNama} ✓`, 'success');
+      loadStokKeranjang();
+    } catch(e) {
+      showToast('Gagal hapus: ' + e.message, 'error');
+    } finally {
+      btn.disabled = false; btn.textContent = '🗑️ Ya, Hapus';
+    }
   };
 
   /* ==========================================================
