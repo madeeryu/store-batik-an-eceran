@@ -1145,13 +1145,6 @@
             </div>
             <div id="stok-keranjang-actions"></div>
           </div>
-          <!-- Search real-time -->
-          <div style="position:relative;margin-top:12px;max-width:340px">
-            <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:14px;color:var(--text-muted)">🔍</span>
-            <input type="text" id="stok-keranjang-search" placeholder="Cari nama produk..." autocomplete="off"
-              oninput="onStokKeranjangSearch(this.value)"
-              style="width:100%;padding:9px 12px 9px 34px;border:1.5px solid var(--input-border);border-radius:9px;font-size:14px;font-family:inherit;outline:none" />
-          </div>
           <div id="stok-keranjang-filter" class="mt-16"></div>
         </div>
         <div id="stok-keranjang-content">
@@ -1309,13 +1302,6 @@
             <button class="btn btn-primary btn-sm" id="tab-semua-eceran" onclick="setMasterProdukTab('semua')">Semua Produk Eceran</button>
             <button class="btn btn-secondary btn-sm" id="tab-khusus-eceran" onclick="setMasterProdukTab('khusus')">Khusus Eceran</button>
             <button class="btn btn-secondary btn-sm" id="tab-juga-grosir" onclick="setMasterProdukTab('grosir')">Yang Juga di Grosir</button>
-          </div>
-          <!-- Search real-time -->
-          <div style="position:relative;margin-top:12px;max-width:340px">
-            <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:14px;color:var(--text-muted)">🔍</span>
-            <input type="text" id="master-produk-search" placeholder="Cari nama produk..." autocomplete="off"
-              oninput="onMasterProdukSearch(this.value)"
-              style="width:100%;padding:9px 12px 9px 34px;border:1.5px solid var(--input-border);border-radius:9px;font-size:14px;font-family:inherit;outline:none" />
           </div>
         </div>
         <div class="card">
@@ -3587,18 +3573,36 @@
   }
 
   function _renderMitraStokTable(container, allItems, filterKat) {
-    let items = filterKat ? allItems.filter(i => i._kategori === filterKat) : allItems;
+    const mitraId   = currentUserData?.mitra_id || '';
+    const mitraNama = currentMitra?.nama || '';
+    const searchHTML = `
+      <div style="position:relative;flex:1;min-width:200px;max-width:420px">
+        <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:14px;color:var(--text-muted)">🔍</span>
+        <input type="text" id="stok-keranjang-search" placeholder="Cari nama produk..." autocomplete="off"
+          value="${(_stokKeranjangSearch || '').replace(/"/g,'&quot;')}"
+          oninput="onStokKeranjangSearch(this.value)"
+          style="width:100%;padding:9px 12px 9px 34px;border:1.5px solid var(--input-border);border-radius:9px;font-size:14px;font-family:inherit;outline:none" />
+      </div>`;
+    container.innerHTML = `
+      <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
+        ${searchHTML}
+        ${mitraId ? `<button class="btn btn-secondary btn-sm" onclick="openRiwayatStokMitra('${mitraId}','${mitraNama.replace(/'/g,"\\'")}')">📋 Riwayat Stok Keranjang</button>` : ''}
+      </div>
+      <div id="mitra-stok-list"></div>`;
+    _renderMitraStokListOnly(document.getElementById('mitra-stok-list'), allItems, filterKat);
+  }
 
-    // Filter pencarian nama produk (real-time)
+  // Render hanya daftar (tabel) view mitra — dipakai juga oleh search agar fokus terjaga
+  function _renderMitraStokListOnly(listEl, allItems, filterKat) {
+    if (!listEl) return;
+    let items = filterKat ? allItems.filter(i => i._kategori === filterKat) : allItems;
     const _q = (_stokKeranjangSearch || '').trim().toLowerCase();
     if (_q) items = items.filter(i => (i.produk_nama || '').toLowerCase().includes(_q));
-
-    // Sort A-Z
     items = [...items].sort((a, b) => (a.produk_nama || '').localeCompare(b.produk_nama || '', 'id'));
 
     if (!items.length) {
       const msg = _q ? `Tidak ada produk yang cocok dengan "<strong>${_q}</strong>".` : 'Tidak ada produk dalam kategori ini.';
-      container.innerHTML = `<div class="empty-state"><span class="empty-icon">🔍</span>
+      listEl.innerHTML = `<div class="empty-state"><span class="empty-icon">🔍</span>
         <h3>Tidak ada produk</h3><p>${msg}</p></div>`;
       return;
     }
@@ -3625,12 +3629,7 @@
       </tr>`;
     }).join('');
 
-    const mitraId   = currentUserData?.mitra_id || '';
-    const mitraNama = currentMitra?.nama || '';
-    container.innerHTML = `
-      ${mitraId ? `<div style="display:flex;justify-content:flex-end;margin-bottom:10px">
-        <button class="btn btn-secondary btn-sm" onclick="openRiwayatStokMitra('${mitraId}','${mitraNama.replace(/'/g,"\\'")}')">📋 Riwayat Stok Keranjang</button>
-      </div>` : ''}
+    listEl.innerHTML = `
       <div class="table-wrap">
         <table>
           <thead>
@@ -3720,8 +3719,52 @@
     }
 
     const valMap = window._produkValMap || {};
-    let grandModal = 0, grandProfit = 0, grandPcs = 0;
 
+    // Banner total dihitung dari item mitra+kategori (TANPA search) agar stabil saat mengetik
+    let grandModal = 0, grandProfit = 0, grandPcs = 0;
+    filteredMitra.forEach(m => {
+      let its = stokByMitra[m.id] || [];
+      if (filterKat) its = its.filter(i => i._kategori === filterKat);
+      its.forEach(d => {
+        const stok = d.stok_pcs || 0;
+        const v = valMap[d.produk_id] || { modal: 0, harga: 0 };
+        grandModal += stok * v.modal; grandProfit += stok * (v.harga - v.modal); grandPcs += stok;
+      });
+    });
+
+    const banner = `
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px">
+        <div style="background:linear-gradient(135deg,#1D9E75,#168a62);color:#fff;border-radius:12px;padding:12px 14px">
+          <div style="font-size:11px;opacity:0.9;font-weight:600">💎 NILAI STOK KERANJANG (MODAL)</div>
+          <div style="font-size:19px;font-weight:800;margin-top:2px">${formatRupiah(grandModal)}</div>
+          <div style="font-size:10.5px;opacity:0.85;margin-top:2px">${grandPcs} pcs total</div>
+        </div>
+        <div style="background:var(--white);border:1px solid var(--border);border-radius:12px;padding:12px 14px">
+          <div style="font-size:11px;color:var(--text-muted);font-weight:600">📈 PROFIT POTENSIAL</div>
+          <div style="font-size:19px;font-weight:800;color:var(--green-text);margin-top:2px">${formatRupiah(grandProfit)}</div>
+          <div style="font-size:10.5px;color:var(--text-muted);margin-top:2px">Jika semua stok keranjang terjual</div>
+        </div>
+      </div>`;
+
+    // Search tepat di bawah banner (lebih enak di HP)
+    const searchHTML = `
+      <div style="position:relative;margin-bottom:14px;max-width:420px">
+        <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:14px;color:var(--text-muted)">🔍</span>
+        <input type="text" id="stok-keranjang-search" placeholder="Cari nama produk..." autocomplete="off"
+          value="${(_stokKeranjangSearch || '').replace(/"/g,'&quot;')}"
+          oninput="onStokKeranjangSearch(this.value)"
+          style="width:100%;padding:9px 12px 9px 34px;border:1.5px solid var(--input-border);border-radius:9px;font-size:14px;font-family:inherit;outline:none" />
+      </div>`;
+
+    container.innerHTML = `${banner}${searchHTML}<div id="sk-cards"></div>`;
+    _renderSkCardsList(filteredMitra, stokByMitra, filterKat);
+  }
+
+  // Render hanya daftar kartu (dipakai juga oleh search agar input tak hilang fokus)
+  function _renderSkCardsList(filteredMitra, stokByMitra, filterKat) {
+    const el = document.getElementById('sk-cards');
+    if (!el) return;
+    const valMap = window._produkValMap || {};
     const _q = (_stokKeranjangSearch || '').trim().toLowerCase();
     const cardsHTML = filteredMitra.map(mitra => {
       let items = stokByMitra[mitra.id] || [];
@@ -3787,8 +3830,6 @@
         </tr>`;
       }).join('');
 
-      grandModal += cardModal; grandProfit += cardProfit; grandPcs += cardPcs;
-
       return `
         <div class="card mb-16">
           <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:14px">
@@ -3817,25 +3858,10 @@
         </div>`;
     }).join('');
 
-    // Banner total keseluruhan keranjang
-    const banner = `
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px">
-        <div style="background:linear-gradient(135deg,#1D9E75,#168a62);color:#fff;border-radius:12px;padding:12px 14px">
-          <div style="font-size:11px;opacity:0.9;font-weight:600">💎 NILAI STOK KERANJANG (MODAL)</div>
-          <div style="font-size:19px;font-weight:800;margin-top:2px">${formatRupiah(grandModal)}</div>
-          <div style="font-size:10.5px;opacity:0.85;margin-top:2px">${grandPcs} pcs total</div>
-        </div>
-        <div style="background:var(--white);border:1px solid var(--border);border-radius:12px;padding:12px 14px">
-          <div style="font-size:11px;color:var(--text-muted);font-weight:600">📈 PROFIT POTENSIAL</div>
-          <div style="font-size:19px;font-weight:800;color:var(--green-text);margin-top:2px">${formatRupiah(grandProfit)}</div>
-          <div style="font-size:10.5px;color:var(--text-muted);margin-top:2px">Jika semua stok keranjang terjual</div>
-        </div>
-      </div>`;
-
     const noResult = (_q && !cardsHTML.trim())
       ? `<div class="empty-state"><span class="empty-icon">🔍</span><h3>Tidak ada produk</h3><p>Tidak ada produk yang cocok dengan "<strong>${_q}</strong>".</p></div>`
       : '';
-    container.innerHTML = banner + (cardsHTML.trim() ? cardsHTML : noResult);
+    el.innerHTML = cardsHTML.trim() ? cardsHTML : noResult;
   }
 
   let _stokKeranjangKategori = '';
@@ -3846,10 +3872,24 @@
     const container = document.getElementById('stok-keranjang-content');
     if (!container) return;
     if (currentUserData.role === 'mitra') {
-      renderStokKeranjangMitraFiltered(container);
+      // Re-render hanya daftar agar input search tak kehilangan fokus
+      const listEl = document.getElementById('mitra-stok-list');
+      if (listEl && window._mitraStokItems) {
+        _renderMitraStokListOnly(listEl, window._mitraStokItems, _stokKeranjangKategori);
+      } else {
+        renderStokKeranjangMitraFiltered(container);
+      }
     } else {
+      // Staff: cukup perbarui daftar kartu (#sk-cards), banner & search tetap
+      const skCards = document.getElementById('sk-cards');
       const mitraVal = document.getElementById('filter-mitra-stok')?.value || '';
-      renderStokKeranjangCards(container, window._mitraListStok, window._stokByMitra, mitraVal, _stokKeranjangKategori);
+      const ml = window._mitraListStok || [];
+      const fm = mitraVal ? ml.filter(m => m.id === mitraVal) : ml;
+      if (skCards) {
+        _renderSkCardsList(fm, window._stokByMitra || {}, _stokKeranjangKategori);
+      } else {
+        renderStokKeranjangCards(container, window._mitraListStok, window._stokByMitra, mitraVal, _stokKeranjangKategori);
+      }
     }
   };
 
@@ -5977,20 +6017,19 @@
       const _q = (_masterProdukSearch || '').trim().toLowerCase();
       if (_q) produkList = produkList.filter(p => (p.nama || '').toLowerCase().includes(_q));
 
+      const isGrosirTab = _masterProdukTab === 'grosir';
+
+      // ---- Bangun HTML daftar produk (tabel atau pesan kosong) ----
+      let listHTML;
       if (!produkList.length) {
-        // Jika ada filter tapi tidak ada hasil, tampilkan pesan
         const emptyMsg = _q
           ? `Tidak ada produk yang cocok dengan "<strong>${_q}</strong>".`
           : _masterProdukKategori
             ? `Tidak ada produk dalam kategori "<strong>${_masterProdukKategori}</strong>".`
             : 'Tambahkan produk eceran menggunakan tombol di atas.';
-        const filterChips = _renderKategoriChips(kategoriList, 'setMasterProdukKategori');
-        cont.innerHTML = `${filterChips}<div class="empty-state"><span class="empty-icon">🔍</span>
+        listHTML = `<div class="empty-state"><span class="empty-icon">🔍</span>
           <h3>Tidak ada produk</h3><p>${emptyMsg}</p></div>`;
-        return;
-      }
-
-      const isGrosirTab = _masterProdukTab === 'grosir';
+      } else {
 
       const rows = produkList.map(p => {
         const eceranAktif = p.eceran?.aktif === true;
@@ -6068,6 +6107,28 @@
              💡 Perubahan modal TIDAK mempengaruhi transaksi yang sudah dikonfirmasi (modal di-snapshot saat konfirmasi).
            </div>`;
 
+      listHTML = `
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>Nama Produk</th><th>Kategori</th>
+              <th>Modal (Rp/pcs)</th><th>Harga (Rp/pcs)</th>
+              <th>Margin (Rp)</th><th>Margin (%)</th>
+              ${!isGrosirTab ? '<th>Stok Rumah Eceran</th>' : ''}
+              <th>Status</th><th>Aksi</th>
+            </tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+        ${grosirTabNote}`;
+      } // tutup else (produkList ada isinya)
+
+      // Saat pencarian (cache): cukup perbarui daftar agar input search tak kehilangan fokus
+      if (useCache) {
+        const listEl = document.getElementById('mp-list');
+        if (listEl) { listEl.innerHTML = listHTML; return; }
+      }
+
       const filterChipsMaster = _renderKategoriChips(kategoriList, 'setMasterProdukKategori');
 
       // Banner ringkasan nilai stok keseluruhan (rumah + keranjang)
@@ -6096,22 +6157,21 @@
           </div>
         </div>`;
 
+      // Search ditempatkan tepat di bawah banner nilai stok (lebih enak di HP)
+      const searchHTML = `
+        <div style="position:relative;margin-bottom:14px;max-width:420px">
+          <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:14px;color:var(--text-muted)">🔍</span>
+          <input type="text" id="master-produk-search" placeholder="Cari nama produk..." autocomplete="off"
+            value="${(_masterProdukSearch || '').replace(/"/g,'&quot;')}"
+            oninput="onMasterProdukSearch(this.value)"
+            style="width:100%;padding:9px 12px 9px 34px;border:1.5px solid var(--input-border);border-radius:9px;font-size:14px;font-family:inherit;outline:none" />
+        </div>`;
+
       cont.innerHTML = `
         ${nilaiBanner}
+        ${searchHTML}
         ${filterChipsMaster}
-        <div class="table-wrap">
-          <table>
-            <thead><tr>
-              <th>Nama Produk</th><th>Kategori</th>
-              <th>Modal (Rp/pcs)</th><th>Harga (Rp/pcs)</th>
-              <th>Margin (Rp)</th><th>Margin (%)</th>
-              ${!isGrosirTab ? '<th>Stok Rumah Eceran</th>' : ''}
-              <th>Status</th><th>Aksi</th>
-            </tr></thead>
-            <tbody>${rows}</tbody>
-          </table>
-        </div>
-        ${grosirTabNote}`;
+        <div id="mp-list">${listHTML}</div>`;
     } catch(e) {
       cont.innerHTML = `<div class="empty-state"><span class="empty-icon">⚠️</span><h3>Error</h3><p>${e.message}</p></div>`;
     }
