@@ -4828,11 +4828,14 @@
         return;
       }
 
+      // Tanggal lokal YYYY-MM-DD (hindari toISOString yang menggeser ke UTC → beda hari)
+      const _ymdLocal = (dt) => `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+
       // Group by (mitra_id + tanggal_str) → satu record per mitra per hari
       const grouped = {};
       trxList.forEach(trx => {
         const tglStr = trx.tanggal_pasaran?.toDate
-          ? trx.tanggal_pasaran.toDate().toISOString().split('T')[0]
+          ? _ymdLocal(trx.tanggal_pasaran.toDate())
           : '';
         if (!tglStr) return;
         const key = `${trx.mitra_id}_${tglStr}`;
