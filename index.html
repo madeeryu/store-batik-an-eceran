@@ -1951,6 +1951,19 @@
   const auth = getAuth(app);
   const db = getFirestore(app);
 
+  // Cache koleksi 'produk' (data referensi: nama/harga/kategori, jarang berubah)
+  // untuk mengurangi Firestore reads yang berulang. Stok TIDAK di-cache agar
+  // ketersediaan barang selalu real-time (hindari over-selling).
+  let _produkCache = null; // { ts, docs:[{id,...}] }
+  const _PRODUK_TTL = 5 * 60 * 1000; // 5 menit
+  async function getProdukCached(force = false) {
+    if (!force && _produkCache && (Date.now() - _produkCache.ts) < _PRODUK_TTL) return _produkCache.docs;
+    const snap = await getDocs(collection(db, 'produk'));
+    const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    _produkCache = { ts: Date.now(), docs };
+    return docs;
+  }
+
   /* ============================================================
      GLOBAL STATE
   ============================================================ */
@@ -3163,12 +3176,9 @@
       _editTrxData = { id, ...snap.data() };
       _editTrxItems = (_editTrxData.items || []).map(i => ({ ...i }));
       if (isOwner()) {
-        const prodSnap = await getDocs(collection(db, 'produk'));
-        _editTrxProdukList = [];
-        prodSnap.forEach(d => {
-          const data = d.data();
-          if (data.eceran?.aktif === true) _editTrxProdukList.push({ id: d.id, ...data });
-        });
+        _editTrxProdukList = (await getProdukCached())
+          .filter(data => data.eceran?.aktif === true)
+          .map(data => ({ ...data }));
       }
       _renderEditTrxForm();
     } catch(e) {
@@ -3543,13 +3553,11 @@
       return;
     }
 
-    // Load produk kategori map
-    const produkSnap = await getDocs(collection(db, 'produk'));
+    // Load produk kategori map (via cache)
     const produkKatMap = {};
     const kategoriSet = new Set();
-    produkSnap.forEach(d => {
-      const kat = d.data().eceran?.kategori || 'lain';
-      produkKatMap[d.id] = kat;
+    (await getProdukCached()).forEach(d => {
+      produkKatMap[d.id] = d.eceran?.kategori || 'lain';
     });
 
     let allItems = snap.docs.map(d => {
@@ -3661,14 +3669,12 @@
       return;
     }
 
-    // Load produk kategori + valuasi (modal/harga) map
-    const produkSnap = await getDocs(collection(db, 'produk'));
+    // Load produk kategori + valuasi (modal/harga) map (via cache)
     const produkKatMap = {};
     const produkValMap = {};
-    produkSnap.forEach(d => {
-      const data = d.data();
-      produkKatMap[d.id] = data.eceran?.kategori || 'lain';
-      produkValMap[d.id] = { modal: data.eceran?.modal_pcs ?? 0, harga: data.eceran?.harga_pcs ?? 0 };
+    (await getProdukCached()).forEach(data => {
+      produkKatMap[data.id] = data.eceran?.kategori || 'lain';
+      produkValMap[data.id] = { modal: data.eceran?.modal_pcs ?? 0, harga: data.eceran?.harga_pcs ?? 0 };
     });
     window._produkKatMap = produkKatMap;
     window._produkValMap = produkValMap;
@@ -3973,16 +3979,11 @@
         isiStokMitraNama = mitraList[0].nama;
       }
 
-      // Load produk eceran aktif, sort A-Z
-      const prodSnap = await getDocs(collection(db, 'produk'));
-      const produkEceran = [];
-      prodSnap.forEach(d => {
-        const data = d.data();
-        if (data.eceran?.aktif === true) {
-          produkEceran.push({ id: d.id, ...data });
-        }
-      });
-      produkEceran.sort((a, b) => (a.nama || '').localeCompare(b.nama || '', 'id'));
+      // Load produk eceran aktif, sort A-Z (via cache)
+      const produkEceran = (await getProdukCached())
+        .filter(data => data.eceran?.aktif === true)
+        .map(data => ({ ...data }))
+        .sort((a, b) => (a.nama || '').localeCompare(b.nama || '', 'id'));
 
       // Render form
       const mitraOptsHTML = mitraList.map(m =>
